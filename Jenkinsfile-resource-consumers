@@ -71,175 +71,41 @@ pipeline {
                             }
                         }
 
-                        // Build detailed Service Log message
-                        def message = """Resource Consumption Report (6-Day Average)
-
-SUMMARY:
-Top ${params.TOP_N} resource-consuming namespaces based on 6-day average usage.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CPU CONSUMPTION (Top ${params.TOP_N}):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"""
-
+                        // Build customer-friendly Service Log message - single line
                         def totalCpu = 0
-                        cpuData.eachWithIndex { item, idx ->
-                            def cores = item.value.round(3)
-                            totalCpu += cores
-                            message += """${idx + 1}. ${item.namespace.padRight(40)} ${cores} cores
-"""
-                        }
-                        message += """
-Total (Top ${params.TOP_N}): ${totalCpu.round(3)} cores
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-MEMORY CONSUMPTION (Top ${params.TOP_N}):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"""
+                        cpuData.each { item -> totalCpu += item.value }
 
                         def totalMem = 0
-                        memData.eachWithIndex { item, idx ->
-                            def gib = (item.value / 1024 / 1024 / 1024).round(3)
-                            totalMem += gib
-                            message += """${idx + 1}. ${item.namespace.padRight(40)} ${gib} GiB
-"""
-                        }
-                        message += """
-Total (Top ${params.TOP_N}): ${totalMem.round(3)} GiB
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                        memData.each { item -> totalMem += item.value / 1024 / 1024 / 1024 }
 
-ANALYSIS PERIOD:
-• Timeframe: Last 6 days (144 hours)
-• Metric: Average consumption
-• Source: Prometheus metrics
+                        def topCpuNamespaces = cpuData.take(3).collect { it.namespace }.join(', ')
+                        def topMemNamespaces = memData.take(3).collect { it.namespace }.join(', ')
 
-CAPACITY PLANNING INSIGHTS:
-
-CPU Observations:
-- Top ${params.TOP_N} namespaces consuming ${totalCpu.round(2)} cores average
-- Review if CPU requests match actual usage
-- Consider rightsize if usage << requests (over-provisioned)
-- Consider scale up if usage near limits (under-provisioned)
-
-Memory Observations:
-- Top ${params.TOP_N} namespaces consuming ${totalMem.round(2)} GiB average
-- Memory usage trends more stable than CPU
-- OOMKilled events indicate insufficient limits
-- Unused memory requests waste cluster capacity
-
-OPTIMIZATION OPPORTUNITIES:
-
-1. Right-size resource requests:
-   'oc set resources deployment/<name> -n <namespace> \\
-     --requests=cpu=<value>,memory=<value> \\
-     --limits=cpu=<value>,memory=<value>'
-
-2. Implement Vertical Pod Autoscaler (VPA):
-   - Automatically adjusts requests/limits
-   - Based on historical usage
-   - Reduces over/under provisioning
-
-3. Review Horizontal Pod Autoscaler (HPA):
-   - Scale pods based on CPU/memory metrics
-   - Optimize replica counts
-   - Balance load across pods
-
-4. Identify resource waste:
-   'oc adm top pods -n <namespace> --sort-by=cpu'
-   'oc adm top pods -n <namespace> --sort-by=memory'
-
-5. Check for idle/zombie resources:
-   - Pods with near-zero CPU usage
-   - Deployments scaled to 0
-   - Unused PVCs
-
-COST IMPLICATIONS:
-Resource over-provisioning directly impacts:
-- Node count requirements
-- Infrastructure costs
-- Cluster scaling efficiency
-- Scheduling flexibility
-
-RECOMMENDED ACTIONS:
-1. Compare actual usage vs requested resources
-2. Identify over-provisioned workloads (usage << requests)
-3. Identify under-provisioned workloads (usage near limits)
-4. Adjust resource requests/limits accordingly
-5. Monitor impact of changes over next week
-
-MONITORING QUERIES:
-• CPU usage: 'sum(rate(container_cpu_usage_seconds_total[5m])) by (namespace)'
-• Memory usage: 'sum(container_memory_working_set_bytes) by (namespace)'
-• Pod count: 'count(kube_pod_info) by (namespace)'
-
-SEVERITY: Info
-Regular capacity planning and optimization report.
-"""
+                        def message = "Resource consumption report (6-day average): Top ${params.TOP_N} namespaces consuming ${totalCpu.round(2)} CPU cores and ${totalMem.round(2)} GiB memory. Highest CPU consumers: ${topCpuNamespaces}. Highest memory consumers: ${topMemNamespaces}. This is an informational report for capacity planning."
 
                         echo message
 
-                        sh """
-                            // Write message to temporary file to avoid argument length issues
-                            writeFile file: 'service-log-message.txt', text: message
+                        // Write message to temporary file to avoid argument length issues
+                        writeFile file: 'service-log-message.txt', text: message
 
-                            sh """
-                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Low' 'Resource Consumption Report (Top ${params.TOP_N})'
-                            """
+                        sh """
+                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Low' 'Resource Consumption Report'
                         """
 
                         currentBuild.result = 'SUCCESS'
                     } else {
                         echo "⚠️  No resource consumption data available"
 
-                        // Build Service Log for missing data
-                        def message = """Resource Consumption Report - Data Unavailable
-
-SUMMARY:
-Unable to retrieve resource consumption metrics at this time. This may be temporary and does not indicate a cluster issue.
-
-STATUS:
-⚠️  Prometheus metrics data not available
-⚠️  Resource consumption report could not be generated
-
-POSSIBLE CAUSES:
-• Prometheus metrics collection delay
-• Temporary network connectivity to monitoring stack
-• Monitoring stack initialization in progress
-• Insufficient metrics history (cluster recently deployed)
-
-IMPACT:
-• No immediate impact on cluster operations
-• Monitoring and metrics collection continue normally
-• Resource usage data will be available in next check
-
-NEXT STEPS:
-1. Verify Prometheus pods are running:
-   'oc get pods -n openshift-monitoring | grep prometheus'
-
-2. Check Prometheus route accessibility:
-   'oc get route prometheus-k8s -n openshift-monitoring'
-
-3. If issue persists beyond next check, investigate monitoring stack health
-
-MONITORING DETAILS:
-• Check Type: Automated Resource Consumption Report
-• Requested Top Consumers: ${params.TOP_N}
-• Check Date: ${new Date().format('yyyy-MM-dd HH:mm:ss')} UTC
-• Next Check: Scheduled in 6 days
-
-SEVERITY: Info
-This is informational. Metrics data temporarily unavailable.
-"""
+                        // Build customer-friendly Service Log message - single line
+                        def message = "Resource consumption metrics are temporarily unavailable. This may be due to Prometheus initialization or recent cluster deployment. Metrics collection continues normally and data will be available in the next check. No action required."
 
                         echo message
 
-                        sh """
-                            // Write message to temporary file to avoid argument length issues
-                            writeFile file: 'service-log-message.txt', text: message
+                        // Write message to temporary file to avoid argument length issues
+                        writeFile file: 'service-log-message.txt', text: message
 
-                            sh """
-                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Low' 'Resource Consumption Report - Data Unavailable'
-                            """
+                        sh """
+                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Low' 'Resource Consumption Data Unavailable'
                         """
 
                         currentBuild.result = 'SUCCESS'
