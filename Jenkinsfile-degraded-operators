@@ -17,6 +17,13 @@ pipeline {
             }
         }
 
+        stage('Debug - Verify Git Version') {
+            steps {
+                sh 'git log --oneline -1'
+                sh 'grep -A 3 "EOFMSG" Jenkinsfile-degraded-operators || echo "EOFMSG not found - using old version!"'
+            }
+        }
+
         stage('Backplane Login') {
             steps {
                 script {
