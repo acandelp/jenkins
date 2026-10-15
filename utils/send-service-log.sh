@@ -15,9 +15,11 @@ DESCRIPTION=$(cat)
 echo "Sending Service Log to cluster $CLUSTER_ID..." >&2
 echo "Severity: $SEVERITY" >&2
 echo "Summary: $SUMMARY" >&2
+echo "" >&2
 
-# Build JSON payload using jq and pipe directly to ocm post
-# ocm post reads JSON from stdin when no --body flag is provided
+# Build JSON payload using jq and pipe to ocm post
+# --yes: Skip confirmation prompt
+# Format response with jq for readability
 jq -n \
   --arg cluster_uuid "$CLUSTER_ID" \
   --arg severity "$SEVERITY" \
@@ -30,6 +32,23 @@ jq -n \
     service_name: $service_name,
     summary: $summary,
     description: $description
-  }' | ocm post /api/service_logs/v1/cluster_logs
+  }' | ocm post /api/service_logs/v1/cluster_logs --yes | jq -r '
+  if .items then
+    .items[] |
+    "✅ Service Log Created Successfully
 
+📋 Details:
+  • ID: \(.id)
+  • Severity: \(.severity)
+  • Summary: \(.summary)
+  • Timestamp: \(.timestamp)
+  • Event Stream: \(.event_stream_id)
+
+The Service Log is now visible to the customer in OCM Console."
+  else
+    "✅ Service Log sent successfully!"
+  end
+'
+
+echo "" >&2
 echo "✅ Service Log sent successfully!" >&2
