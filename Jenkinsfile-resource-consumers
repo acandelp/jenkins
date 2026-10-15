@@ -81,7 +81,11 @@ pipeline {
                         def topCpuNamespaces = cpuData.take(3).collect { it.namespace }.join(', ')
                         def topMemNamespaces = memData.take(3).collect { it.namespace }.join(', ')
 
-                        def message = "Resource consumption report (current usage): Top ${params.TOP_N} namespaces consuming ${totalCpu.round(2)} CPU cores and ${totalMem.round(2)} GiB memory. Highest CPU consumers: ${topCpuNamespaces}. Highest memory consumers: ${topMemNamespaces}. This is an informational snapshot for capacity planning."
+                        // Format numbers with 2 decimal places using String.format (sandbox-safe)
+                        def cpuFormatted = String.format("%.2f", totalCpu)
+                        def memFormatted = String.format("%.2f", totalMem)
+
+                        def message = "Resource consumption report (current usage): Top ${params.TOP_N} namespaces consuming ${cpuFormatted} CPU cores and ${memFormatted} GiB memory. Highest CPU consumers: ${topCpuNamespaces}. Highest memory consumers: ${topMemNamespaces}. This is an informational snapshot for capacity planning."
 
                         echo message
 
