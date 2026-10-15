@@ -3,7 +3,6 @@ pipeline {
 
     parameters {
         string(name: 'CLUSTER_ID', defaultValue: '', description: 'Cluster ID to check')
-        string(name: 'LOOKBACK_DAYS', defaultValue: '6', description: 'Days to look back')
     }
 
     environment {
@@ -17,19 +16,11 @@ pipeline {
             }
         }
 
-        stage('Debug - Verify Git Version') {
-            steps {
-                sh 'git log --oneline -1'
-                sh 'grep -A 3 "EOFMSG" Jenkinsfile-degraded-operators || echo "EOFMSG not found - using old version!"'
-            }
-        }
-
         stage('Backplane Login') {
             steps {
                 script {
                     echo "Setting up Backplane authentication..."
 
-                    // Validate CLUSTER_ID is provided
                     if (!params.CLUSTER_ID) {
                         error("CLUSTER_ID parameter is required")
                     }
@@ -54,7 +45,7 @@ pipeline {
             steps {
                 script {
                     def results = sh(
-                        script: "./scripts/check-operators.sh ${params.LOOKBACK_DAYS}",
+                        script: "./scripts/check-operators.sh",
                         returnStdout: true
                     ).trim()
 
@@ -66,13 +57,13 @@ pipeline {
                         def operatorDetails = []
 
                         results.split('\n').each { line ->
-                            def parts = line.split('\\|', 3)
+                            def parts = line.split('\\|', 2)
                             def operatorName = parts[0]
-                            def ageDays = parts[1]
-                            operatorDetails << "${operatorName} (degraded for ${ageDays} days)"
+                            def reason = parts.size() > 1 ? parts[1] : "Unknown reason"
+                            operatorDetails << "${operatorName}"
                         }
 
-                        def message = "Detected ${operatorCount} degraded cluster operator(s) in the last ${params.LOOKBACK_DAYS} days: ${operatorDetails.join(', ')}. Our SRE team is investigating. If you experience issues with your applications, please open a support case."
+                        def message = "Detected ${operatorCount} degraded cluster operator(s): ${operatorDetails.join(', ')}. Our SRE team is investigating. If you experience issues with your applications, please open a support case."
 
                         echo message
 
@@ -80,15 +71,15 @@ pipeline {
                         writeFile file: 'service-log-message.txt', text: message
 
                         sh """
-                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Warning' 'Degraded Cluster Operators (${operatorCount} affected)'
+                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Warning' 'Cluster Operators Degraded (${operatorCount})'
                         """
 
                         currentBuild.result = 'UNSTABLE'
                     } else {
-                        echo "✅ No degraded operators in last ${params.LOOKBACK_DAYS} days"
+                        echo "✅ No degraded operators found"
 
                         // Build positive Service Log message - single line
-                        def message = "No degraded cluster operators detected in the last ${params.LOOKBACK_DAYS} days. All cluster operators are healthy and functioning normally. No action required."
+                        def message = "All cluster operators are healthy and functioning normally. No degraded operators detected. No action required."
 
                         echo message
 
@@ -96,7 +87,7 @@ pipeline {
                         writeFile file: 'service-log-message.txt', text: message
 
                         sh """
-                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Low' 'Cluster Health Check - All Operators Healthy'
+                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Low' 'Cluster Operators Healthy'
                         """
 
                         currentBuild.result = 'SUCCESS'
