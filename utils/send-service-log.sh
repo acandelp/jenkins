@@ -16,13 +16,26 @@ echo "Sending Service Log to cluster $CLUSTER_ID..." >&2
 echo "Severity: $SEVERITY" >&2
 echo "Summary: $SUMMARY" >&2
 
-ocm post /api/service_logs/v1/cluster_logs \
-  --body="{
-    \"cluster_uuid\": \"${CLUSTER_ID}\",
-    \"severity\": \"${SEVERITY}\",
-    \"service_name\": \"SREManualAction\",
-    \"summary\": \"${SUMMARY}\",
-    \"description\": \"${DESCRIPTION}\"
-  }"
+# Create temporary JSON file to avoid argument length issues
+TEMP_JSON=$(mktemp)
+trap "rm -f $TEMP_JSON" EXIT
+
+# Build JSON payload using jq to ensure proper escaping
+jq -n \
+  --arg cluster_uuid "$CLUSTER_ID" \
+  --arg severity "$SEVERITY" \
+  --arg service_name "SREManualAction" \
+  --arg summary "$SUMMARY" \
+  --arg description "$DESCRIPTION" \
+  '{
+    cluster_uuid: $cluster_uuid,
+    severity: $severity,
+    service_name: $service_name,
+    summary: $summary,
+    description: $description
+  }' > "$TEMP_JSON"
+
+# Post using --body-file instead of --body
+ocm post /api/service_logs/v1/cluster_logs --body-file="$TEMP_JSON"
 
 echo "✅ Service Log sent successfully!" >&2
