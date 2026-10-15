@@ -65,19 +65,8 @@ pipeline {
                             }
                         }
 
-                        // Build customer-friendly Service Log message
-                        def upgradeList = upgrades.collect { "  • ${it}" }.join('\n')
-
-                        def message = """A new OpenShift version is available for your cluster.
-
-Current version: ${currentVersion}
-Available upgrade(s):
-${upgradeList}
-
-This upgrade includes security patches, bug fixes, and new features. If you would like to schedule an upgrade, please open a support case and we will coordinate a maintenance window with you.
-
-No immediate action is required.
-"""
+                        // Build customer-friendly Service Log message - single line
+                        def message = "New OpenShift version available. Current: ${currentVersion}. Available upgrade(s): ${upgrades.join(', ')}. This upgrade includes security patches, bug fixes, and new features. To schedule an upgrade, please open a support case."
 
                         echo message
 
@@ -105,13 +94,8 @@ No immediate action is required.
                             returnStdout: true
                         ).trim()
 
-                        // Build customer-friendly Service Log message
-                        def message = """Your cluster is running the latest available version (${currentVersion}).
-
-No new upgrades are currently available. We will notify you when new OpenShift versions become available for your cluster.
-
-No action is required.
-"""
+                        // Build customer-friendly Service Log message - single line
+                        def message = "Your cluster is running the latest available version (${currentVersion}). No new upgrades available. No action required."
 
                         echo message
 

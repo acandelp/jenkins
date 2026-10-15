@@ -61,24 +61,18 @@ pipeline {
                     if (results) {
                         echo "⚠️  Found degraded cluster operators"
 
-                        // Build customer-friendly Service Log message
+                        // Build customer-friendly Service Log message - single line
                         def operatorCount = results.split('\n').size()
-                        def operatorList = ""
+                        def operatorDetails = []
 
                         results.split('\n').each { line ->
                             def parts = line.split('\\|', 3)
                             def operatorName = parts[0]
                             def ageDays = parts[1]
-                            operatorList += "  • ${operatorName} (degraded for ${ageDays} day(s))\n"
+                            operatorDetails << "${operatorName} (degraded for ${ageDays} days)"
                         }
 
-                        def message = """We detected ${operatorCount} cluster operator(s) in degraded state during our routine health check:
-
-${operatorList}
-Our SRE team is aware and investigating. This may impact certain cluster functions, but your workloads should continue running normally.
-
-We will provide updates as we work to resolve this. If you notice any issues with your applications, please open a support case.
-"""
+                        def message = "Detected ${operatorCount} degraded cluster operator(s) in the last ${params.LOOKBACK_DAYS} days: ${operatorDetails.join(', ')}. Our SRE team is investigating. If you experience issues with your applications, please open a support case."
 
                         echo message
 
@@ -93,13 +87,8 @@ We will provide updates as we work to resolve this. If you notice any issues wit
                     } else {
                         echo "✅ No degraded operators in last ${params.LOOKBACK_DAYS} days"
 
-                        // Build positive Service Log message
-                        def message = """Your cluster operators are healthy and functioning normally.
-
-We performed our routine ${params.LOOKBACK_DAYS}-day health check and confirmed that all cluster operators are running as expected with no degraded components.
-
-No action is required on your part. We will continue monitoring and notify you if anything requires attention.
-"""
+                        // Build positive Service Log message - single line
+                        def message = "No degraded cluster operators detected in the last ${params.LOOKBACK_DAYS} days. All cluster operators are healthy and functioning normally. No action required."
 
                         echo message
 

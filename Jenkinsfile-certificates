@@ -50,25 +50,19 @@ pipeline {
                     if (results) {
                         echo "⚠️  Found certificates expiring soon"
 
-                        // Build customer-friendly Service Log message
+                        // Build customer-friendly Service Log message - single line
                         def certCount = results.split('\n').size()
-                        def certList = ""
+                        def certDetails = []
 
                         results.split('\n').each { line ->
                             def parts = line.split('\\|')
                             def namespace = parts[0]
                             def secretName = parts[1]
                             def daysLeft = parts[2]
-                            certList += "  • ${namespace}/${secretName} (expires in ${daysLeft} days)\n"
+                            certDetails << "${namespace}/${secretName} (expires in ${daysLeft} days)"
                         }
 
-                        def message = """We found ${certCount} SSL/TLS certificate(s) expiring within the next ${params.DAYS_WARNING} days:
-
-${certList}
-Please ensure these certificates are renewed before expiration to prevent service interruptions.
-
-If you need assistance with certificate renewal, please open a support case.
-"""
+                        def message = "Found ${certCount} SSL/TLS certificate(s) expiring within ${params.DAYS_WARNING} days: ${certDetails.join(', ')}. Please renew before expiration to prevent service interruptions. Open a support case if you need assistance."
 
                         echo message
 
@@ -83,13 +77,8 @@ If you need assistance with certificate renewal, please open a support case.
                     } else {
                         echo "✅ No certificates expiring in the next ${params.DAYS_WARNING} days"
 
-                        // Build customer-friendly Service Log message
-                        def message = """Your cluster SSL/TLS certificates are valid and healthy.
-
-We checked all certificates in your cluster and confirmed none are expiring within the next ${params.DAYS_WARNING} days.
-
-No action is required. We will continue monitoring and notify you if any certificates need renewal.
-"""
+                        // Build customer-friendly Service Log message - single line
+                        def message = "All SSL/TLS certificates are valid. No certificates expiring within the next ${params.DAYS_WARNING} days. No action required."
 
                         echo message
 
