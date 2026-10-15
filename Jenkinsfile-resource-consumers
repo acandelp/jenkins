@@ -13,6 +13,22 @@ pipeline {
             }
         }
 
+        stage('Backplane Login') {
+            steps {
+                script {
+                    echo "Setting up Backplane authentication..."
+                    if (!params.CLUSTER_ID) {
+                        error("CLUSTER_ID parameter is required")
+                    }
+                    sh """
+                        export PATH=\${HOME}/.local/bin/backplane/latest:\${PATH}
+                        ocm backplane login ${params.CLUSTER_ID}
+                    """
+                    echo "✅ Backplane login successful"
+                }
+            }
+        }
+
         stage('Setup') {
             steps {
                 sh 'chmod +x scripts/*.sh utils/*.sh'
@@ -177,6 +193,15 @@ Regular capacity planning and optimization report.
     }
 
     post {
+        always {
+            script {
+                sh '''
+                    export PATH=${HOME}/.local/bin/backplane/latest:${PATH}
+                    ocm backplane logout || true
+                '''
+                echo "🔒 Backplane session closed"
+            }
+        }
         failure {
             echo "❌ Pipeline failed - check Prometheus access"
         }
