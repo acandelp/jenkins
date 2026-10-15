@@ -16,12 +16,9 @@ echo "Sending Service Log to cluster $CLUSTER_ID..." >&2
 echo "Severity: $SEVERITY" >&2
 echo "Summary: $SUMMARY" >&2
 
-# Create temporary JSON file to avoid argument length issues
-TEMP_JSON=$(mktemp)
-trap "rm -f $TEMP_JSON" EXIT
-
 # Build JSON payload using jq to ensure proper escaping
-jq -n \
+# jq handles all special characters and produces valid JSON
+JSON_PAYLOAD=$(jq -n \
   --arg cluster_uuid "$CLUSTER_ID" \
   --arg severity "$SEVERITY" \
   --arg service_name "SREManualAction" \
@@ -33,9 +30,10 @@ jq -n \
     service_name: $service_name,
     summary: $summary,
     description: $description
-  }' > "$TEMP_JSON"
+  }')
 
-# Post using --body-file instead of --body
-ocm post /api/service_logs/v1/cluster_logs --body-file="$TEMP_JSON"
+# Post using --body with the JSON string
+# The JSON is already properly escaped by jq
+ocm post /api/service_logs/v1/cluster_logs --body="$JSON_PAYLOAD"
 
 echo "✅ Service Log sent successfully!" >&2
