@@ -16,9 +16,9 @@ echo "Sending Service Log to cluster $CLUSTER_ID..." >&2
 echo "Severity: $SEVERITY" >&2
 echo "Summary: $SUMMARY" >&2
 
-# Build JSON payload using jq to ensure proper escaping
-# jq handles all special characters and produces valid JSON
-JSON_PAYLOAD=$(jq -n \
+# Build JSON payload using jq and pipe directly to ocm post
+# ocm post reads JSON from stdin when no --body flag is provided
+jq -n \
   --arg cluster_uuid "$CLUSTER_ID" \
   --arg severity "$SEVERITY" \
   --arg service_name "SREManualAction" \
@@ -30,10 +30,6 @@ JSON_PAYLOAD=$(jq -n \
     service_name: $service_name,
     summary: $summary,
     description: $description
-  }')
-
-# Post using --body with the JSON string
-# The JSON is already properly escaped by jq
-ocm post /api/service_logs/v1/cluster_logs --body="$JSON_PAYLOAD"
+  }' | ocm post /api/service_logs/v1/cluster_logs
 
 echo "✅ Service Log sent successfully!" >&2
