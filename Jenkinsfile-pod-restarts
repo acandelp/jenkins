@@ -1,0 +1,128 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'CLUSTER_ID', defaultValue: '', description: 'Cluster ID to check')
+        string(name: 'RESTART_THRESHOLD', defaultValue: '10', description: 'Restart count threshold')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Setup') {
+            steps {
+                sh 'chmod +x scripts/*.sh utils/*.sh'
+            }
+        }
+
+        stage('Check Pod Restarts') {
+            steps {
+                script {
+                    def results = sh(
+                        script: "./scripts/check-pod-restarts.sh ${params.RESTART_THRESHOLD}",
+                        returnStdout: true
+                    ).trim()
+
+                    if (results) {
+                        echo "⚠️  Found pods with frequent restarts"
+
+                        // Build detailed Service Log message
+                        def podCount = results.split('\n').size()
+                        def message = """Pod Stability Issue - Frequent Restarts
+
+SUMMARY:
+Detected ${podCount} pod(s) with more than ${params.RESTART_THRESHOLD} restarts, indicating stability issues.
+
+PODS WITH FREQUENT RESTARTS:
+"""
+
+                        results.split('\n').each { line ->
+                            def parts = line.split('\\|')
+                            def namespace = parts[0]
+                            def podName = parts[1]
+                            def restartCount = parts[2]
+
+                            message += """
+• Namespace: ${namespace}
+  Pod: ${podName}
+  Restart Count: ${restartCount}
+  Status: Unstable
+"""
+                        }
+
+                        message += """
+IMPACT:
+Frequent pod restarts indicate:
+- Application crashes or errors
+- Liveness/Readiness probe failures
+- Resource constraints (OOM, CPU throttling)
+- Configuration issues
+- Intermittent service availability
+- Degraded user experience
+
+RECOMMENDED ACTIONS:
+1. Investigate pod logs for errors:
+   'oc logs <pod> -n <namespace> --previous'
+   'oc logs <pod> -n <namespace> --tail=100'
+
+2. Check pod events:
+   'oc describe pod <pod> -n <namespace>'
+
+3. Review resource usage:
+   'oc adm top pod <pod> -n <namespace>'
+
+4. Common causes to investigate:
+   - Application errors in logs
+   - Insufficient memory (check for OOMKilled)
+   - Failed health checks (adjust probe timeouts)
+   - Missing dependencies (ConfigMaps, Secrets)
+   - Network connectivity issues
+
+5. If OOMKilled, increase memory limits:
+   'oc set resources deployment/<name> --limits=memory=512Mi'
+
+6. If probe failures, adjust timing:
+   - Increase initialDelaySeconds
+   - Increase timeoutSeconds
+   - Decrease failureThreshold
+
+MONITORING:
+Continue monitoring restart patterns to identify if issue is resolved after remediation.
+
+SEVERITY: Warning
+Requires investigation to prevent service degradation.
+"""
+
+                        echo message
+
+                        sh """
+                            ./utils/send-service-log.sh \\
+                                '${params.CLUSTER_ID}' \\
+                                'Warning' \\
+                                'Unstable Pods - Frequent Restarts (${podCount} affected)' \\
+                                '${message.replaceAll("'", "'\\''")}'
+                        """
+
+                        currentBuild.result = 'UNSTABLE'
+                    } else {
+                        echo "✅ No pods with > ${params.RESTART_THRESHOLD} restarts"
+                        currentBuild.result = 'SUCCESS'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo "❌ Pipeline failed - check cluster access"
+        }
+        success {
+            echo "✅ Pod restart check completed successfully"
+        }
+    }
+}

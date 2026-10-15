@@ -1,0 +1,151 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'CLUSTER_ID', defaultValue: '', description: 'Cluster ID to check')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Setup') {
+            steps {
+                sh 'chmod +x scripts/*.sh utils/*.sh'
+            }
+        }
+
+        stage('Check Available Upgrades') {
+            steps {
+                script {
+                    def results = sh(
+                        script: "./scripts/check-upgrades.sh",
+                        returnStdout: true
+                    ).trim()
+
+                    if (results) {
+                        echo "ℹ️  Cluster upgrades available"
+
+                        // Parse results
+                        def currentVersion = ""
+                        def channel = ""
+                        def upgrades = []
+
+                        results.split('\n').each { line ->
+                            def parts = line.split('\\|')
+                            if (parts[0] == 'CURRENT') {
+                                currentVersion = parts[1]
+                            } else if (parts[0] == 'CHANNEL') {
+                                channel = parts[1]
+                            } else if (parts[0] == 'AVAILABLE') {
+                                upgrades << parts[1]
+                            }
+                        }
+
+                        // Build detailed Service Log message
+                        def message = """OpenShift Cluster Upgrade Available
+
+SUMMARY:
+New OpenShift version(s) available for upgrade.
+
+CURRENT CLUSTER STATE:
+• Current Version: ${currentVersion}
+• Update Channel: ${channel}
+• Upgrade Status: Updates available
+
+AVAILABLE UPGRADES:
+"""
+
+                        upgrades.each { version ->
+                            message += "• ${version}\n"
+                        }
+
+                        message += """
+UPGRADE BENEFITS:
+- Security patches and CVE fixes
+- Bug fixes and stability improvements
+- New features and enhancements
+- Performance optimizations
+- Extended support lifecycle
+
+PRE-UPGRADE CHECKLIST:
+1. Review OpenShift ${upgrades[0]} release notes:
+   https://docs.openshift.com/container-platform/
+
+2. Check upgrade compatibility:
+   - Deprecated API usage
+   - Custom operators compatibility
+   - Third-party integrations
+
+3. Verify cluster health:
+   'oc get clusteroperators'
+   'oc get nodes'
+   - All operators should be Available=True
+   - All nodes should be Ready
+
+4. Backup critical data:
+   - etcd backup
+   - PersistentVolume snapshots if needed
+   - Configuration backups
+
+5. Plan maintenance window:
+   - Control plane upgrade: ~1 hour
+   - Worker nodes: rolling upgrade, minimal disruption
+   - Schedule during low-traffic period
+
+UPGRADE PROCESS:
+1. Update channel (if needed):
+   'oc adm upgrade channel <channel-name>'
+
+2. Initiate upgrade:
+   'oc adm upgrade --to=${upgrades[0]}'
+
+3. Monitor progress:
+   'oc get clusterversion'
+   'watch oc get clusteroperators'
+   'watch oc get nodes'
+
+4. Verify completion:
+   'oc get clusterversion -o json | jq .status.conditions'
+
+ROLLBACK CONSIDERATIONS:
+- OpenShift does not support rollback after upgrade
+- Ensure testing in non-production environment first
+- Have recovery plan ready
+
+SEVERITY: Info
+This is an informational notification for planning purposes.
+"""
+
+                        echo message
+
+                        sh """
+                            ./utils/send-service-log.sh \\
+                                '${params.CLUSTER_ID}' \\
+                                'Info' \\
+                                'Cluster Upgrade Available: ${currentVersion} → ${upgrades[0]}' \\
+                                '${message.replaceAll("'", "'\\''")}'
+                        """
+
+                        currentBuild.result = 'SUCCESS'
+                    } else {
+                        echo "✅ No upgrades available - cluster is up to date"
+                        currentBuild.result = 'SUCCESS'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo "❌ Pipeline failed - check cluster access"
+        }
+        success {
+            echo "✅ Upgrade availability check completed successfully"
+        }
+    }
+}

@@ -1,0 +1,101 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'CLUSTER_ID', defaultValue: '', description: 'Cluster ID to check')
+        string(name: 'DAYS_WARNING', defaultValue: '60', description: 'Days before expiry to warn')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Setup') {
+            steps {
+                sh 'chmod +x scripts/*.sh utils/*.sh'
+            }
+        }
+
+        stage('Check Certificates') {
+            steps {
+                script {
+                    def results = sh(
+                        script: "./scripts/check-certificates.sh ${params.DAYS_WARNING}",
+                        returnStdout: true
+                    ).trim()
+
+                    if (results) {
+                        echo "⚠️  Found certificates expiring soon"
+
+                        // Build detailed Service Log message
+                        def certCount = results.split('\n').size()
+                        def message = """SSL/TLS Certificate Expiration Alert
+
+SUMMARY:
+Found ${certCount} certificate(s) expiring within the next ${params.DAYS_WARNING} days.
+
+CERTIFICATES EXPIRING:
+"""
+
+                        results.split('\n').each { line ->
+                            def parts = line.split('\\|')
+                            def namespace = parts[0]
+                            def secretName = parts[1]
+                            def daysLeft = parts[2]
+                            def expiryDate = parts[3]
+
+                            message += """
+• Namespace: ${namespace}
+  Secret: ${secretName}
+  Days Remaining: ${daysLeft} days
+  Expiration Date: ${expiryDate}
+"""
+                        }
+
+                        message += """
+IMPACT:
+Certificate expiration can cause service interruptions, TLS handshake failures, and application downtime.
+
+RECOMMENDED ACTIONS:
+1. Verify certificate renewal process is in place
+2. Coordinate certificate renewal with application teams
+3. Update secrets with renewed certificates before expiration
+4. Test applications after certificate renewal
+
+SEVERITY: Warning
+This is a proactive notification to prevent service disruptions.
+"""
+
+                        echo message
+
+                        // Send Service Log
+                        sh """
+                            ./utils/send-service-log.sh \\
+                                '${params.CLUSTER_ID}' \\
+                                'Warning' \\
+                                'SSL/TLS Certificates Expiring Soon (${certCount} found)' \\
+                                '${message.replaceAll("'", "'\\''")}'
+                        """
+
+                        currentBuild.result = 'UNSTABLE'
+                    } else {
+                        echo "✅ No certificates expiring in the next ${params.DAYS_WARNING} days"
+                        currentBuild.result = 'SUCCESS'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo "❌ Pipeline failed - check logs for errors"
+        }
+        success {
+            echo "✅ Certificate check completed successfully"
+        }
+    }
+}

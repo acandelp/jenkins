@@ -1,0 +1,135 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'CLUSTER_ID', defaultValue: '', description: 'Cluster ID to check')
+        string(name: 'LOOKBACK_DAYS', defaultValue: '6', description: 'Days to look back')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Setup') {
+            steps {
+                sh 'chmod +x scripts/*.sh utils/*.sh'
+            }
+        }
+
+        stage('Check OOM Events') {
+            steps {
+                script {
+                    def results = sh(
+                        script: "./scripts/check-oom-events.sh ${params.LOOKBACK_DAYS}",
+                        returnStdout: true
+                    ).trim()
+
+                    if (results) {
+                        echo "⚠️  Found OOMKilled events"
+
+                        // Build detailed Service Log message
+                        def oomCount = results.split('\n').size()
+                        def message = """Out of Memory (OOM) Events Detected
+
+SUMMARY:
+Found ${oomCount} OOMKilled event(s) in the last ${params.LOOKBACK_DAYS} days.
+
+OOM EVENTS:
+"""
+
+                        results.split('\n').each { line ->
+                            def parts = line.split('\\|')
+                            def namespace = parts[0]
+                            def podName = parts[1]
+                            def ageDays = parts[2]
+                            def timestamp = parts[3]
+
+                            message += """
+• Namespace: ${namespace}
+  Pod: ${podName}
+  Occurred: ${ageDays} day(s) ago
+  Timestamp: ${timestamp}
+  Reason: Container exceeded memory limit
+"""
+                        }
+
+                        message += """
+IMPACT:
+OOMKilled pods indicate:
+- Insufficient memory allocation for workload
+- Potential memory leaks in application
+- Service interruptions and restarts
+- Data loss if application doesn't persist state
+- Degraded performance before OOM occurs
+
+ROOT CAUSE ANALYSIS:
+1. Review current memory limits:
+   'oc get pod <pod> -n <namespace> -o jsonpath="{.spec.containers[*].resources}"'
+
+2. Check actual memory usage before OOM:
+   - Review metrics in Prometheus/Grafana
+   - Query: container_memory_usage_bytes
+
+3. Analyze application logs for memory patterns:
+   'oc logs <pod> -n <namespace> --previous'
+
+RECOMMENDED ACTIONS:
+1. Increase memory limits if workload legitimately needs more:
+   'oc set resources deployment/<name> -n <namespace> --limits=memory=1Gi --requests=memory=512Mi'
+
+2. For memory leaks:
+   - Review application code
+   - Check for unbounded caches/collections
+   - Implement proper garbage collection
+   - Add memory profiling
+
+3. Optimize application memory usage:
+   - Review buffer sizes
+   - Implement streaming for large data
+   - Use pagination for database queries
+   - Clear unused objects/connections
+
+4. Set appropriate requests and limits:
+   - requests: typical usage
+   - limits: maximum allowed (prevents runaway)
+   - Gap between them allows burst usage
+
+CAPACITY PLANNING:
+Monitor memory trends over 7-30 days to set appropriate limits with headroom.
+
+SEVERITY: Warning
+Memory issues can cause service instability and data loss.
+"""
+
+                        echo message
+
+                        sh """
+                            ./utils/send-service-log.sh \\
+                                '${params.CLUSTER_ID}' \\
+                                'Warning' \\
+                                'OOMKilled Events Detected (${oomCount} occurrences)' \\
+                                '${message.replaceAll("'", "'\\''")}'
+                        """
+
+                        currentBuild.result = 'UNSTABLE'
+                    } else {
+                        echo "✅ No OOMKilled events in last ${params.LOOKBACK_DAYS} days"
+                        currentBuild.result = 'SUCCESS'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo "❌ Pipeline failed - check cluster access"
+        }
+        success {
+            echo "✅ OOM events check completed successfully"
+        }
+    }
+}

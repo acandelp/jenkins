@@ -1,0 +1,25 @@
+#!/bin/bash
+set -euo pipefail
+
+# Simple wrapper for sending service logs
+# Usage: ./send-service-log.sh CLUSTER_ID SEVERITY SUMMARY DESCRIPTION
+
+CLUSTER_ID=$1
+SEVERITY=$2
+SUMMARY=$3
+DESCRIPTION=$4
+
+echo "Sending Service Log to cluster $CLUSTER_ID..." >&2
+echo "Severity: $SEVERITY" >&2
+echo "Summary: $SUMMARY" >&2
+
+ocm post /api/service_logs/v1/cluster_logs \
+  --body="{
+    \"cluster_uuid\": \"${CLUSTER_ID}\",
+    \"severity\": \"${SEVERITY}\",
+    \"service_name\": \"SREManualAction\",
+    \"summary\": \"${SUMMARY}\",
+    \"description\": \"${DESCRIPTION}\"
+  }"
+
+echo "✅ Service Log sent successfully!" >&2

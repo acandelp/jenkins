@@ -1,0 +1,107 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'CLUSTER_ID', defaultValue: '', description: 'Cluster ID to check')
+        string(name: 'GROWTH_THRESHOLD', defaultValue: '20', description: 'Growth % threshold (6 days)')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Setup') {
+            steps {
+                sh 'chmod +x scripts/*.sh utils/*.sh'
+            }
+        }
+
+        stage('Check PVC Growth') {
+            steps {
+                script {
+                    def results = sh(
+                        script: "./scripts/check-pvc-growth.sh ${params.GROWTH_THRESHOLD}",
+                        returnStdout: true
+                    ).trim()
+
+                    if (results) {
+                        echo "⚠️  Found PVCs with high growth rate"
+
+                        // Build detailed Service Log message
+                        def pvcCount = results.split('\n').size()
+                        def message = """Persistent Volume Growth Alert
+
+SUMMARY:
+Detected ${pvcCount} PersistentVolumeClaim(s) with growth exceeding ${params.GROWTH_THRESHOLD}% over the last 6 days.
+
+PVCs WITH HIGH GROWTH:
+"""
+
+                        results.split('\n').each { line ->
+                            def parts = line.split('\\|')
+                            def namespace = parts[0]
+                            def pvcName = parts[1]
+                            def growthPercent = parts[2].toFloat().round(2)
+
+                            message += """
+• Namespace: ${namespace}
+  PVC: ${pvcName}
+  Growth Rate: ${growthPercent}% (6-day period)
+  Projection: ~${(growthPercent * 30 / 6).round(2)}% per month
+"""
+                        }
+
+                        message += """
+IMPACT:
+Rapid PVC growth can lead to:
+- Storage capacity exhaustion
+- Pod eviction due to disk pressure
+- Application failures when PVC reaches 100% capacity
+- Potential data loss if applications cannot write
+
+RECOMMENDED ACTIONS:
+1. Review application logs in affected namespaces for unusual activity
+2. Identify source of data growth (logs, temp files, database growth)
+3. Evaluate if PVC resize is needed: 'oc set volume' or edit PVC
+4. Consider implementing data retention/cleanup policies
+5. Monitor PVC usage trends: 'oc get pvc -n <namespace>'
+
+CAPACITY PLANNING:
+Based on current growth rate, estimate when PVC will reach capacity and plan expansion accordingly.
+
+SEVERITY: Warning
+Proactive monitoring to prevent storage-related outages.
+"""
+
+                        echo message
+
+                        sh """
+                            ./utils/send-service-log.sh \\
+                                '${params.CLUSTER_ID}' \\
+                                'Warning' \\
+                                'High PVC Growth Detected (${pvcCount} affected)' \\
+                                '${message.replaceAll("'", "'\\''")}'
+                        """
+
+                        currentBuild.result = 'UNSTABLE'
+                    } else {
+                        echo "✅ No PVCs with growth > ${params.GROWTH_THRESHOLD}%"
+                        currentBuild.result = 'SUCCESS'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo "❌ Pipeline failed - check Prometheus access and metrics availability"
+        }
+        success {
+            echo "✅ PVC growth check completed successfully"
+        }
+    }
+}

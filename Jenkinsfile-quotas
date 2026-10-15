@@ -1,0 +1,114 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'CLUSTER_ID', defaultValue: '', description: 'Cluster ID to check')
+        string(name: 'USAGE_THRESHOLD', defaultValue: '85', description: 'Usage % threshold')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Setup') {
+            steps {
+                sh 'chmod +x scripts/*.sh utils/*.sh'
+            }
+        }
+
+        stage('Check Resource Quotas') {
+            steps {
+                script {
+                    def results = sh(
+                        script: "./scripts/check-quotas.sh ${params.USAGE_THRESHOLD}",
+                        returnStdout: true
+                    ).trim()
+
+                    if (results) {
+                        echo "⚠️  Found quotas approaching limits"
+
+                        // Build detailed Service Log message
+                        def quotaCount = results.split('\n').size()
+                        def message = """Resource Quota Approaching Limit
+
+SUMMARY:
+Found ${quotaCount} resource quota(s) exceeding ${params.USAGE_THRESHOLD}% capacity.
+
+QUOTAS NEAR LIMIT:
+"""
+
+                        results.split('\n').each { line ->
+                            def parts = line.split('\\|')
+                            def namespace = parts[0]
+                            def quotaName = parts[1]
+                            def resourceType = parts[2]
+                            def usagePercent = parts[3]
+                            def used = parts[4]
+                            def hard = parts[5]
+
+                            message += """
+• Namespace: ${namespace}
+  Quota Name: ${quotaName}
+  Resource: ${resourceType}
+  Usage: ${usagePercent}% (${used} of ${hard})
+  Remaining: ${hard.replaceAll('[^0-9]', '').toInteger() - used.replaceAll('[^0-9]', '').toInteger()}
+"""
+                        }
+
+                        message += """
+IMPACT:
+When quotas reach 100%:
+- New pods will fail to schedule with 'quota exceeded' errors
+- Deployments will be stuck in pending state
+- Applications cannot scale horizontally
+- Service degradation or complete outage possible
+
+RECOMMENDED ACTIONS:
+1. Contact namespace owners to review resource usage
+2. Evaluate if quota increase is justified:
+   - Check current usage: 'oc describe quota -n <namespace>'
+   - Review pod resource requests/limits
+3. Optimize resource requests if over-provisioned
+4. Consider horizontal pod autoscaling limits
+5. Update quota if legitimate growth:
+   'oc patch resourcequota <name> -n <namespace> --patch=...'
+
+QUOTA MANAGEMENT:
+Resource quotas prevent runaway resource consumption but must be sized appropriately for workload needs.
+
+SEVERITY: Warning
+Action required to prevent deployment failures.
+"""
+
+                        echo message
+
+                        sh """
+                            ./utils/send-service-log.sh \\
+                                '${params.CLUSTER_ID}' \\
+                                'Warning' \\
+                                'Resource Quotas Approaching Limits (${quotaCount} affected)' \\
+                                '${message.replaceAll("'", "'\\''")}'
+                        """
+
+                        currentBuild.result = 'UNSTABLE'
+                    } else {
+                        echo "✅ All quotas below ${params.USAGE_THRESHOLD}%"
+                        currentBuild.result = 'SUCCESS'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo "❌ Pipeline failed - check cluster access"
+        }
+        success {
+            echo "✅ Resource quota check completed successfully"
+        }
+    }
+}

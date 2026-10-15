@@ -1,0 +1,187 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'CLUSTER_ID', defaultValue: '', description: 'Cluster ID to check')
+        string(name: 'TOP_N', defaultValue: '5', description: 'Number of top consumers to report')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Setup') {
+            steps {
+                sh 'chmod +x scripts/*.sh utils/*.sh'
+            }
+        }
+
+        stage('Check Top Resource Consumers') {
+            steps {
+                script {
+                    def results = sh(
+                        script: "./scripts/check-resource-consumers.sh ${params.TOP_N}",
+                        returnStdout: true
+                    ).trim()
+
+                    if (results) {
+                        echo "ℹ️  Resource consumption report generated"
+
+                        // Parse results
+                        def lines = results.split('\n')
+                        def mode = ""
+                        def cpuData = []
+                        def memData = []
+
+                        lines.each { line ->
+                            if (line == 'CPU') {
+                                mode = 'CPU'
+                            } else if (line == 'MEMORY') {
+                                mode = 'MEMORY'
+                            } else if (line) {
+                                def parts = line.split('\\|')
+                                if (mode == 'CPU') {
+                                    cpuData << [namespace: parts[0], value: parts[1].toFloat()]
+                                } else if (mode == 'MEMORY') {
+                                    memData << [namespace: parts[0], value: parts[1].toFloat()]
+                                }
+                            }
+                        }
+
+                        // Build detailed Service Log message
+                        def message = """Resource Consumption Report (6-Day Average)
+
+SUMMARY:
+Top ${params.TOP_N} resource-consuming namespaces based on 6-day average usage.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CPU CONSUMPTION (Top ${params.TOP_N}):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+
+                        def totalCpu = 0
+                        cpuData.eachWithIndex { item, idx ->
+                            def cores = item.value.round(3)
+                            totalCpu += cores
+                            message += """${idx + 1}. ${item.namespace.padRight(40)} ${cores} cores
+"""
+                        }
+                        message += """
+Total (Top ${params.TOP_N}): ${totalCpu.round(3)} cores
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MEMORY CONSUMPTION (Top ${params.TOP_N}):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+
+                        def totalMem = 0
+                        memData.eachWithIndex { item, idx ->
+                            def gib = (item.value / 1024 / 1024 / 1024).round(3)
+                            totalMem += gib
+                            message += """${idx + 1}. ${item.namespace.padRight(40)} ${gib} GiB
+"""
+                        }
+                        message += """
+Total (Top ${params.TOP_N}): ${totalMem.round(3)} GiB
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ANALYSIS PERIOD:
+• Timeframe: Last 6 days (144 hours)
+• Metric: Average consumption
+• Source: Prometheus metrics
+
+CAPACITY PLANNING INSIGHTS:
+
+CPU Observations:
+- Top ${params.TOP_N} namespaces consuming ${totalCpu.round(2)} cores average
+- Review if CPU requests match actual usage
+- Consider rightsize if usage << requests (over-provisioned)
+- Consider scale up if usage near limits (under-provisioned)
+
+Memory Observations:
+- Top ${params.TOP_N} namespaces consuming ${totalMem.round(2)} GiB average
+- Memory usage trends more stable than CPU
+- OOMKilled events indicate insufficient limits
+- Unused memory requests waste cluster capacity
+
+OPTIMIZATION OPPORTUNITIES:
+
+1. Right-size resource requests:
+   'oc set resources deployment/<name> -n <namespace> \\
+     --requests=cpu=<value>,memory=<value> \\
+     --limits=cpu=<value>,memory=<value>'
+
+2. Implement Vertical Pod Autoscaler (VPA):
+   - Automatically adjusts requests/limits
+   - Based on historical usage
+   - Reduces over/under provisioning
+
+3. Review Horizontal Pod Autoscaler (HPA):
+   - Scale pods based on CPU/memory metrics
+   - Optimize replica counts
+   - Balance load across pods
+
+4. Identify resource waste:
+   'oc adm top pods -n <namespace> --sort-by=cpu'
+   'oc adm top pods -n <namespace> --sort-by=memory'
+
+5. Check for idle/zombie resources:
+   - Pods with near-zero CPU usage
+   - Deployments scaled to 0
+   - Unused PVCs
+
+COST IMPLICATIONS:
+Resource over-provisioning directly impacts:
+- Node count requirements
+- Infrastructure costs
+- Cluster scaling efficiency
+- Scheduling flexibility
+
+RECOMMENDED ACTIONS:
+1. Compare actual usage vs requested resources
+2. Identify over-provisioned workloads (usage << requests)
+3. Identify under-provisioned workloads (usage near limits)
+4. Adjust resource requests/limits accordingly
+5. Monitor impact of changes over next week
+
+MONITORING QUERIES:
+• CPU usage: 'sum(rate(container_cpu_usage_seconds_total[5m])) by (namespace)'
+• Memory usage: 'sum(container_memory_working_set_bytes) by (namespace)'
+• Pod count: 'count(kube_pod_info) by (namespace)'
+
+SEVERITY: Info
+Regular capacity planning and optimization report.
+"""
+
+                        echo message
+
+                        sh """
+                            ./utils/send-service-log.sh \\
+                                '${params.CLUSTER_ID}' \\
+                                'Info' \\
+                                'Resource Consumption Report (Top ${params.TOP_N})' \\
+                                '${message.replaceAll("'", "'\\''")}'
+                        """
+
+                        currentBuild.result = 'SUCCESS'
+                    } else {
+                        echo "⚠️  No resource consumption data available"
+                        currentBuild.result = 'SUCCESS'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo "❌ Pipeline failed - check Prometheus access"
+        }
+        success {
+            echo "✅ Resource consumption report completed successfully"
+        }
+    }
+}
