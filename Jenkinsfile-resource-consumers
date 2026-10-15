@@ -78,10 +78,16 @@ pipeline {
                         def totalMem = 0
                         memData.each { item -> totalMem += item.value / 1024 / 1024 / 1024 }
 
-                        def topCpuNamespaces = cpuData.take(3).collect { it.namespace }.join(', ')
-                        def topMemNamespaces = memData.take(3).collect { it.namespace }.join(', ')
+                        // Build detailed namespace lists with individual consumption values
+                        def topCpuNamespaces = cpuData.take(3).collect {
+                            "${it.namespace} (${String.format('%.2f', it.value)} cores)"
+                        }.join(', ')
 
-                        // Format numbers with 2 decimal places using String.format (sandbox-safe)
+                        def topMemNamespaces = memData.take(3).collect {
+                            "${it.namespace} (${String.format('%.2f', it.value / 1024 / 1024 / 1024)} GiB)"
+                        }.join(', ')
+
+                        // Format total numbers with 2 decimal places using String.format (sandbox-safe)
                         def cpuFormatted = String.format("%.2f", totalCpu)
                         def memFormatted = String.format("%.2f", totalMem)
 
