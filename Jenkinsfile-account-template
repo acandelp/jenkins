@@ -1,0 +1,296 @@
+// Template for Account-Based Health Checks
+// Copy this file and customize for your specific check
+//
+// Example: Jenkinsfile-account-certificates
+//          Jenkinsfile-account-quotas
+//          Jenkinsfile-account-pod-restarts
+
+pipeline {
+    agent any
+
+    parameters {
+        string(
+            name: 'ACCOUNT_NUMBER',
+            defaultValue: '',
+            description: 'Account Number (EBS Account ID) - Required'
+        )
+        choice(
+            name: 'EXECUTION_MODE',
+            choices: ['sequential', 'parallel'],
+            description: 'Execute checks sequentially or in parallel'
+        )
+        // ADD YOUR CUSTOM PARAMETERS HERE
+        // Example:
+        // string(name: 'THRESHOLD', defaultValue: '85', description: 'Warning threshold percentage')
+    }
+
+    environment {
+        PATH = "${env.HOME}/.local/bin/backplane/latest:${env.HOME}/.local/bin:/usr/local/bin:${env.PATH}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Validate Parameters') {
+            steps {
+                script {
+                    if (!params.ACCOUNT_NUMBER) {
+                        error("ACCOUNT_NUMBER parameter is required")
+                    }
+                    echo "🔍 Account Number: ${params.ACCOUNT_NUMBER}"
+                    echo "⚙️  Execution Mode: ${params.EXECUTION_MODE}"
+                }
+            }
+        }
+
+        stage('Get Clusters from Account') {
+            steps {
+                script {
+                    echo "📋 Retrieving clusters for Account: ${params.ACCOUNT_NUMBER}"
+
+                    sh 'chmod +x utils/*.sh scripts/*.sh'
+
+                    // Get cluster details (cluster_id|name|state)
+                    def clusterDetails = sh(
+                        script: "./utils/get-clusters-by-account.sh ${params.ACCOUNT_NUMBER} details",
+                        returnStdout: true
+                    ).trim()
+
+                    if (!clusterDetails) {
+                        error("No clusters found for Account Number: ${params.ACCOUNT_NUMBER}")
+                    }
+
+                    // Parse cluster details
+                    def clusters = clusterDetails.split('\n').collect { line ->
+                        def parts = line.split('\\|')
+                        [
+                            id: parts[0],
+                            name: parts.size() > 1 ? parts[1] : 'UNKNOWN',
+                            state: parts.size() > 2 ? parts[2] : 'UNKNOWN'
+                        ]
+                    }
+
+                    // Filter only ready clusters
+                    def readyClusters = clusters.findAll { it.state == 'ready' }
+
+                    echo "✅ Found ${clusters.size()} total clusters, ${readyClusters.size()} in ready state"
+                    readyClusters.each { cluster ->
+                        echo "  - ${cluster.id} (${cluster.name}) - ${cluster.state}"
+                    }
+
+                    if (readyClusters.isEmpty()) {
+                        error("No ready clusters found for Account Number: ${params.ACCOUNT_NUMBER}")
+                    }
+
+                    // Store for next stage
+                    env.CLUSTERS_JSON = groovy.json.JsonOutput.toJson(readyClusters)
+                    env.CLUSTER_COUNT = readyClusters.size().toString()
+                }
+            }
+        }
+
+        stage('Execute Health Checks') {
+            steps {
+                script {
+                    def clusters = new groovy.json.JsonSlurper().parseText(env.CLUSTERS_JSON)
+
+                    // Define the check closure
+                    def checkClosure = { cluster ->
+                        return {
+                            stage("Check ${cluster.name}") {
+                                try {
+                                    echo "🔍 Checking cluster: ${cluster.name} (${cluster.id})"
+
+                                    // ============================================
+                                    // STEP 1: Backplane Login
+                                    // ============================================
+                                    sh """
+                                        export PATH=\${HOME}/.local/bin/backplane/latest:\${PATH}
+                                        ocm backplane login ${cluster.id}
+                                    """
+                                    echo "✅ Backplane login successful for ${cluster.name}"
+
+                                    // ============================================
+                                    // STEP 2: Execute Your Health Check Script
+                                    // ============================================
+                                    // CUSTOMIZE THIS SECTION
+                                    // Replace with your check script and parameters
+                                    //
+                                    // Examples:
+                                    // def results = sh(script: "./scripts/check-certificates.sh", returnStdout: true).trim()
+                                    // def results = sh(script: "./scripts/check-quotas.sh 85", returnStdout: true).trim()
+                                    // def results = sh(script: "./scripts/check-pod-restarts.sh 10", returnStdout: true).trim()
+
+                                    def results = sh(
+                                        script: "./scripts/YOUR-CHECK-SCRIPT.sh YOUR-PARAMS",
+                                        returnStdout: true
+                                    ).trim()
+
+                                    // ============================================
+                                    // STEP 3: Process Results
+                                    // ============================================
+                                    if (results) {
+                                        echo "ℹ️  Health check completed for ${cluster.name}"
+
+                                        // CUSTOMIZE RESULT PROCESSING
+                                        // Parse and format your results here
+                                        // Example: Extract warnings, format message, etc.
+
+                                        def message = "[${cluster.name}] YOUR MESSAGE HERE: ${results}"
+
+                                        echo message
+
+                                        // ============================================
+                                        // STEP 4: Send Service Log
+                                        // ============================================
+                                        writeFile file: "service-log-${cluster.id}.txt", text: message
+
+                                        // CUSTOMIZE SEVERITY AND TITLE
+                                        // Severity options: 'Critical', 'Warning', 'Info', 'Low'
+                                        sh """
+                                            cat service-log-${cluster.id}.txt | ./utils/send-service-log.sh '${cluster.id}' 'Warning' 'YOUR TITLE HERE'
+                                        """
+
+                                        echo "✅ Service log sent for ${cluster.name}"
+                                    } else {
+                                        echo "⚠️  No issues detected for ${cluster.name}"
+
+                                        // Optional: Send "all clear" message
+                                        def message = "[${cluster.name}] Health check completed - no issues detected."
+
+                                        writeFile file: "service-log-${cluster.id}.txt", text: message
+
+                                        sh """
+                                            cat service-log-${cluster.id}.txt | ./utils/send-service-log.sh '${cluster.id}' 'Info' 'Health Check Complete'
+                                        """
+                                    }
+
+                                    // ============================================
+                                    // STEP 5: Backplane Logout
+                                    // ============================================
+                                    sh """
+                                        export PATH=\${HOME}/.local/bin/backplane/latest:\${PATH}
+                                        ocm backplane logout || true
+                                    """
+                                    echo "🔒 Backplane logout for ${cluster.name}"
+
+                                } catch (Exception e) {
+                                    echo "❌ Error checking cluster ${cluster.name}: ${e.message}"
+
+                                    // Ensure logout on error
+                                    sh """
+                                        export PATH=\${HOME}/.local/bin/backplane/latest:\${PATH}
+                                        ocm backplane logout || true
+                                    """
+
+                                    // Mark as unstable but continue with other clusters
+                                    unstable("Failed to check cluster ${cluster.name}")
+                                }
+                            }
+                        }
+                    }
+
+                    // ============================================
+                    // Execute based on mode (parallel or sequential)
+                    // ============================================
+                    if (params.EXECUTION_MODE == 'parallel') {
+                        echo "⚡ Running checks in PARALLEL for ${clusters.size()} clusters"
+
+                        def parallelStages = [:]
+                        clusters.each { cluster ->
+                            parallelStages["${cluster.name}"] = checkClosure(cluster)
+                        }
+
+                        parallel parallelStages
+
+                    } else {
+                        echo "🔄 Running checks SEQUENTIALLY for ${clusters.size()} clusters"
+
+                        clusters.each { cluster ->
+                            checkClosure(cluster).call()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                // Ensure all backplane sessions are closed
+                sh '''
+                    export PATH=${HOME}/.local/bin/backplane/latest:${PATH}
+                    ocm backplane logout || true
+                '''
+                echo "🔒 All Backplane sessions closed"
+
+                // Optional: Cleanup temporary files
+                sh 'rm -f service-log-*.txt || true'
+            }
+        }
+        failure {
+            echo "❌ Pipeline failed - check individual cluster logs for details"
+        }
+        success {
+            echo "✅ Health checks completed successfully for all ${env.CLUSTER_COUNT} clusters in Account ${params.ACCOUNT_NUMBER}"
+        }
+        unstable {
+            echo "⚠️  Pipeline completed with warnings - some clusters failed checks"
+        }
+    }
+}
+
+/*
+ * CUSTOMIZATION CHECKLIST:
+ * ========================
+ *
+ * 1. [ ] Add custom parameters (thresholds, limits, etc.)
+ * 2. [ ] Update health check script path and parameters (STEP 2)
+ * 3. [ ] Customize result processing logic (STEP 3)
+ * 4. [ ] Format Service Log message (STEP 3)
+ * 5. [ ] Set appropriate severity level (STEP 4)
+ * 6. [ ] Set descriptive Service Log title (STEP 4)
+ * 7. [ ] Test with small account first
+ * 8. [ ] Update pipeline description and comments
+ *
+ * EXAMPLE CUSTOMIZATIONS:
+ * =======================
+ *
+ * For Certificate Check:
+ * ---------------------
+ * Parameters:
+ *   - CERT_WARNING_DAYS: '60'
+ *
+ * Script:
+ *   ./scripts/check-certificates.sh
+ *
+ * Severity: 'Warning'
+ * Title: 'Certificate Expiration Warning'
+ *
+ * For Resource Quotas:
+ * -------------------
+ * Parameters:
+ *   - QUOTA_THRESHOLD: '85'
+ *
+ * Script:
+ *   ./scripts/check-quotas.sh ${params.QUOTA_THRESHOLD}
+ *
+ * Severity: 'Warning'
+ * Title: 'Resource Quota Warning'
+ *
+ * For Pod Restarts:
+ * ----------------
+ * Parameters:
+ *   - RESTART_THRESHOLD: '10'
+ *
+ * Script:
+ *   ./scripts/check-pod-restarts.sh ${params.RESTART_THRESHOLD}
+ *
+ * Severity: 'Warning'
+ * Title: 'Pod Restart Warning'
+ */

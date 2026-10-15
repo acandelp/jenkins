@@ -24,8 +24,11 @@ jenkins/
 │   ├── check-operators.sh           # Degraded operators check
 │   └── check-resource-consumers.sh  # Resource consumption report
 ├── utils/
-│   └── send-service-log.sh          # Service Log sender utility
-└── Jenkinsfile-*                    # Individual pipeline definitions
+│   ├── send-service-log.sh          # Service Log sender utility
+│   └── get-clusters-by-account.sh   # Get all clusters for an account
+├── Jenkinsfile-*                    # Individual pipeline definitions (per cluster)
+├── Jenkinsfile-account-*            # Account-based pipelines (all clusters)
+└── ACCOUNT_BASED_CHECKS.md          # Account-based checks documentation
 ```
 
 ## 🔍 Available Health Checks
@@ -77,6 +80,59 @@ jenkins/
 **Severity**: Info  
 **Why**: Capacity planning and cost optimization  
 **Action**: Right-size resources and optimize usage
+
+## 🏢 Account-Based Checks
+
+**NEW!** Run health checks across **all clusters** belonging to a specific customer account.
+
+Instead of checking clusters one at a time, you can now execute health checks on all clusters that share the same Account Number (EBS Account ID).
+
+### Quick Example
+
+```bash
+# Traditional approach: Check one cluster
+Build with Parameters:
+  - CLUSTER_ID: 2dhfsqa1ejpmfvaaaao0v6etmhq2ih10
+
+# NEW: Account-based approach - Check all clusters for account 11800160
+Build with Parameters:
+  - ACCOUNT_NUMBER: 11800160
+  - EXECUTION_MODE: parallel
+```
+
+### Available Account-Based Pipelines
+
+| Pipeline | Description | Use Case |
+|----------|-------------|----------|
+| `Jenkinsfile-account-resource-consumers` | Check resource usage across all account clusters | Quarterly capacity review |
+| `Jenkinsfile-account-template` | Template for creating custom account checks | Build your own |
+
+### Key Features
+
+✅ **Automatic cluster discovery** - Finds all clusters for an account  
+✅ **Parallel or sequential execution** - Choose based on cluster count  
+✅ **Error isolation** - Failed clusters don't block others  
+✅ **Automatic session cleanup** - Backplane sessions always closed  
+
+### Getting Started
+
+```bash
+# 1. Find account number from a cluster
+ocm describe cluster <cluster-id> | grep AccountNumber
+
+# 2. Run account-based check
+Build Job: Account-Resource-Consumers
+Parameters:
+  ACCOUNT_NUMBER: 11800160
+  TOP_N: 5
+  EXECUTION_MODE: sequential
+```
+
+**📖 Full Documentation**: See [ACCOUNT_BASED_CHECKS.md](ACCOUNT_BASED_CHECKS.md) for:
+- Creating custom account-based checks
+- Template customization guide
+- Performance considerations
+- Troubleshooting
 
 ## ⚙️ Configuration
 
