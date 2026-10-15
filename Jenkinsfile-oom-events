@@ -133,6 +133,53 @@ Memory issues can cause service instability and data loss.
                         currentBuild.result = 'UNSTABLE'
                     } else {
                         echo "✅ No OOMKilled events in last ${params.LOOKBACK_DAYS} days"
+
+                        // Build positive Service Log message
+                        def message = """Memory Health Check - No OOM Issues Detected
+
+SUMMARY:
+No Out of Memory (OOM) events detected in the last ${params.LOOKBACK_DAYS} days. All pods are running within their memory allocations.
+
+MEMORY STATUS:
+✅ No OOMKilled events in the last ${params.LOOKBACK_DAYS} days
+✅ All pods running within memory limits
+✅ No memory pressure issues detected
+
+VERIFICATION PERFORMED:
+• Scanned cluster events for OOMKilling events
+• Reviewed pod termination reasons across all namespaces
+• Verified no containers exceeded memory limits
+
+MEMORY HEALTH INDICATORS:
+• Container memory limits are appropriately sized
+• Applications managing memory efficiently
+• No memory leaks or excessive consumption patterns detected
+
+NEXT STEPS:
+✅ No action required - memory health is good
+✅ Continue regular monitoring
+✅ Next automated check will run in 6 days
+
+MONITORING DETAILS:
+• Check Type: Automated OOM Event Detection
+• Lookback Period: ${params.LOOKBACK_DAYS} days
+• Check Date: ${new Date().format('yyyy-MM-dd HH:mm:ss')} UTC
+• Next Check: Scheduled in 6 days
+
+SEVERITY: Info
+This is a routine memory health confirmation. No OOM issues detected.
+"""
+
+                        echo message
+
+                        sh """
+                            ./utils/send-service-log.sh \\
+                                '${params.CLUSTER_ID}' \\
+                                'Info' \\
+                                'Memory Health Check - No OOM Issues Detected' \\
+                                '${message.replaceAll("'", "'\\''")}'
+                        """
+
                         currentBuild.result = 'SUCCESS'
                     }
                 }

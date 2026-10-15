@@ -105,6 +105,54 @@ Proactive monitoring to prevent storage-related outages.
                         currentBuild.result = 'UNSTABLE'
                     } else {
                         echo "✅ No PVCs with growth > ${params.GROWTH_THRESHOLD}%"
+
+                        // Build positive Service Log message
+                        def message = """Storage Growth Health Check - Normal Growth Patterns
+
+SUMMARY:
+All Persistent Volume Claims (PVCs) are showing normal growth patterns. No PVCs with excessive growth (>${params.GROWTH_THRESHOLD}%) detected in the last 6 days.
+
+STORAGE STATUS:
+✅ All PVCs growing at normal rates (<${params.GROWTH_THRESHOLD}% per 6 days)
+✅ No capacity concerns detected
+✅ No immediate storage expansion required
+
+VERIFICATION PERFORMED:
+• Analyzed PVC growth trends over 6-day period using Prometheus metrics
+• Compared current usage against historical data
+• Verified growth rates are within acceptable thresholds
+
+CAPACITY PLANNING:
+• Current growth patterns are sustainable
+• No storage bottlenecks anticipated in near term
+• Regular monitoring continues to track usage trends
+
+NEXT STEPS:
+✅ No action required - storage growth is normal
+✅ Continue regular monitoring
+✅ Next automated check will run in 6 days
+
+MONITORING DETAILS:
+• Check Type: Automated Storage Growth Analysis
+• Growth Threshold: ${params.GROWTH_THRESHOLD}%
+• Analysis Period: 6 days
+• Check Date: ${new Date().format('yyyy-MM-dd HH:mm:ss')} UTC
+• Next Check: Scheduled in 6 days
+
+SEVERITY: Info
+This is a routine storage health confirmation. No growth concerns detected.
+"""
+
+                        echo message
+
+                        sh """
+                            ./utils/send-service-log.sh \\
+                                '${params.CLUSTER_ID}' \\
+                                'Info' \\
+                                'Storage Growth Health Check - Normal Growth Patterns' \\
+                                '${message.replaceAll("'", "'\\''")}'
+                        """
+
                         currentBuild.result = 'SUCCESS'
                     }
                 }

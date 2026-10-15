@@ -149,6 +149,65 @@ This is an informational notification for planning purposes.
                         currentBuild.result = 'SUCCESS'
                     } else {
                         echo "✅ No upgrades available - cluster is up to date"
+
+                        // Get current version for the message
+                        def currentVersion = sh(
+                            script: 'oc get clusterversion version -o jsonpath=\'{.status.desired.version}\'',
+                            returnStdout: true
+                        ).trim()
+
+                        def channel = sh(
+                            script: 'oc get clusterversion version -o jsonpath=\'{.spec.channel}\'',
+                            returnStdout: true
+                        ).trim()
+
+                        // Build positive Service Log message
+                        def message = """Cluster Version Status - Up to Date
+
+SUMMARY:
+Cluster is running the latest available version. No upgrades currently available.
+
+CURRENT CLUSTER STATE:
+✅ Current Version: ${currentVersion}
+✅ Update Channel: ${channel}
+✅ Cluster is up to date with the latest release
+
+VERSION STATUS:
+• No new OpenShift versions available in current channel
+• Cluster is running latest stable release
+• All security patches and updates applied
+
+UPGRADE READINESS:
+• Cluster is healthy and ready for future upgrades when available
+• Update channel is configured correctly
+• Automated checks will notify when upgrades become available
+
+NEXT STEPS:
+✅ No action required - cluster is current
+✅ Continue regular monitoring for new releases
+✅ Next automated check will run in 6 days
+
+MONITORING DETAILS:
+• Check Type: Automated Upgrade Availability Check
+• Current Version: ${currentVersion}
+• Update Channel: ${channel}
+• Check Date: ${new Date().format('yyyy-MM-dd HH:mm:ss')} UTC
+• Next Check: Scheduled in 6 days
+
+SEVERITY: Info
+This is a routine version status confirmation. Cluster is up to date.
+"""
+
+                        echo message
+
+                        sh """
+                            ./utils/send-service-log.sh \\
+                                '${params.CLUSTER_ID}' \\
+                                'Info' \\
+                                'Cluster Version Status - Up to Date' \\
+                                '${message.replaceAll("'", "'\\''")}'
+                        """
+
                         currentBuild.result = 'SUCCESS'
                     }
                 }

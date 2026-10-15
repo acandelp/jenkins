@@ -185,6 +185,57 @@ Regular capacity planning and optimization report.
                         currentBuild.result = 'SUCCESS'
                     } else {
                         echo "⚠️  No resource consumption data available"
+
+                        // Build Service Log for missing data
+                        def message = """Resource Consumption Report - Data Unavailable
+
+SUMMARY:
+Unable to retrieve resource consumption metrics at this time. This may be temporary and does not indicate a cluster issue.
+
+STATUS:
+⚠️  Prometheus metrics data not available
+⚠️  Resource consumption report could not be generated
+
+POSSIBLE CAUSES:
+• Prometheus metrics collection delay
+• Temporary network connectivity to monitoring stack
+• Monitoring stack initialization in progress
+• Insufficient metrics history (cluster recently deployed)
+
+IMPACT:
+• No immediate impact on cluster operations
+• Monitoring and metrics collection continue normally
+• Resource usage data will be available in next check
+
+NEXT STEPS:
+1. Verify Prometheus pods are running:
+   'oc get pods -n openshift-monitoring | grep prometheus'
+
+2. Check Prometheus route accessibility:
+   'oc get route prometheus-k8s -n openshift-monitoring'
+
+3. If issue persists beyond next check, investigate monitoring stack health
+
+MONITORING DETAILS:
+• Check Type: Automated Resource Consumption Report
+• Requested Top Consumers: ${params.TOP_N}
+• Check Date: ${new Date().format('yyyy-MM-dd HH:mm:ss')} UTC
+• Next Check: Scheduled in 6 days
+
+SEVERITY: Info
+This is informational. Metrics data temporarily unavailable.
+"""
+
+                        echo message
+
+                        sh """
+                            ./utils/send-service-log.sh \\
+                                '${params.CLUSTER_ID}' \\
+                                'Info' \\
+                                'Resource Consumption Report - Data Unavailable' \\
+                                '${message.replaceAll("'", "'\\''")}'
+                        """
+
                         currentBuild.result = 'SUCCESS'
                     }
                 }

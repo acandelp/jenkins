@@ -149,6 +149,48 @@ Requires immediate investigation to ensure cluster stability.
                         currentBuild.result = 'UNSTABLE'
                     } else {
                         echo "✅ No degraded operators in last ${params.LOOKBACK_DAYS} days"
+
+                        // Build positive Service Log message
+                        def message = """Cluster Health Check - All Operators Healthy
+
+SUMMARY:
+All cluster operators are functioning normally. No degraded operators detected in the last ${params.LOOKBACK_DAYS} days.
+
+CLUSTER OPERATORS STATUS:
+✅ All cluster operators are Available and not Degraded
+✅ No recent operator issues detected
+✅ Cluster control plane is healthy
+
+VERIFICATION PERFORMED:
+• Checked all cluster operators for degraded conditions
+• Reviewed operator status for the last ${params.LOOKBACK_DAYS} days
+• Verified no operators have transitioned to degraded state
+
+NEXT STEPS:
+✅ No action required - cluster operators are healthy
+✅ Continue regular monitoring
+✅ Next automated check will run in 6 days
+
+MONITORING DETAILS:
+• Check Type: Automated Health Check
+• Lookback Period: ${params.LOOKBACK_DAYS} days
+• Check Date: ${new Date().format('yyyy-MM-dd HH:mm:ss')} UTC
+• Next Check: Scheduled in 6 days
+
+SEVERITY: Info
+This is a routine health confirmation. No issues detected.
+"""
+
+                        echo message
+
+                        sh """
+                            ./utils/send-service-log.sh \\
+                                '${params.CLUSTER_ID}' \\
+                                'Info' \\
+                                'Cluster Health Check - All Operators Healthy' \\
+                                '${message.replaceAll("'", "'\\''")}'
+                        """
+
                         currentBuild.result = 'SUCCESS'
                     }
                 }

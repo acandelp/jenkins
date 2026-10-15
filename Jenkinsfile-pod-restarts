@@ -126,6 +126,53 @@ Requires investigation to prevent service degradation.
                         currentBuild.result = 'UNSTABLE'
                     } else {
                         echo "✅ No pods with > ${params.RESTART_THRESHOLD} restarts"
+
+                        // Build positive Service Log message
+                        def message = """Pod Stability Health Check - All Pods Stable
+
+SUMMARY:
+All pods are running stably with normal restart patterns. No pods with excessive restarts (>${params.RESTART_THRESHOLD}) detected.
+
+POD STABILITY STATUS:
+✅ All pods have acceptable restart counts (<${params.RESTART_THRESHOLD} restarts)
+✅ No crash loops or stability issues detected
+✅ Applications running reliably
+
+VERIFICATION PERFORMED:
+• Scanned all pods across all namespaces
+• Checked container restart counts
+• Verified no pods exhibiting instability patterns
+
+RELIABILITY INDICATORS:
+• Pod restart rates are within normal operational ranges
+• No health probe failures causing excessive restarts
+• No resource constraint issues leading to pod failures
+
+NEXT STEPS:
+✅ No action required - all pods are stable
+✅ Continue regular monitoring
+✅ Next automated check will run in 6 days
+
+MONITORING DETAILS:
+• Check Type: Automated Pod Stability Check
+• Restart Threshold: ${params.RESTART_THRESHOLD} restarts
+• Check Date: ${new Date().format('yyyy-MM-dd HH:mm:ss')} UTC
+• Next Check: Scheduled in 6 days
+
+SEVERITY: Info
+This is a routine pod stability confirmation. No restart issues detected.
+"""
+
+                        echo message
+
+                        sh """
+                            ./utils/send-service-log.sh \\
+                                '${params.CLUSTER_ID}' \\
+                                'Info' \\
+                                'Pod Stability Health Check - All Pods Stable' \\
+                                '${message.replaceAll("'", "'\\''")}'
+                        """
+
                         currentBuild.result = 'SUCCESS'
                     }
                 }

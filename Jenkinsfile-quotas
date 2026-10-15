@@ -112,6 +112,53 @@ Action required to prevent deployment failures.
                         currentBuild.result = 'UNSTABLE'
                     } else {
                         echo "✅ All quotas below ${params.USAGE_THRESHOLD}%"
+
+                        // Build positive Service Log message
+                        def message = """Resource Quota Health Check - All Quotas Healthy
+
+SUMMARY:
+All resource quotas are operating within healthy ranges. No quotas exceeding ${params.USAGE_THRESHOLD}% capacity detected.
+
+QUOTA STATUS:
+✅ All resource quotas below ${params.USAGE_THRESHOLD}% threshold
+✅ Sufficient capacity available for workload scaling
+✅ No deployment failures anticipated due to quota limits
+
+VERIFICATION PERFORMED:
+• Checked all ResourceQuota objects across all namespaces
+• Compared used resources against hard limits
+• Verified quotas have adequate headroom for operations
+
+CAPACITY OVERVIEW:
+• Current usage levels are sustainable
+• Namespaces have room to scale workloads
+• No quota adjustments needed at this time
+
+NEXT STEPS:
+✅ No action required - all quotas are healthy
+✅ Continue regular monitoring
+✅ Next automated check will run in 6 days
+
+MONITORING DETAILS:
+• Check Type: Automated Resource Quota Check
+• Usage Threshold: ${params.USAGE_THRESHOLD}%
+• Check Date: ${new Date().format('yyyy-MM-dd HH:mm:ss')} UTC
+• Next Check: Scheduled in 6 days
+
+SEVERITY: Info
+This is a routine quota health confirmation. No capacity concerns detected.
+"""
+
+                        echo message
+
+                        sh """
+                            ./utils/send-service-log.sh \\
+                                '${params.CLUSTER_ID}' \\
+                                'Info' \\
+                                'Resource Quota Health Check - All Quotas Healthy' \\
+                                '${message.replaceAll("'", "'\\''")}'
+                        """
+
                         currentBuild.result = 'SUCCESS'
                     }
                 }

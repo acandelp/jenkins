@@ -99,6 +99,48 @@ This is a proactive notification to prevent service disruptions.
                         currentBuild.result = 'UNSTABLE'
                     } else {
                         echo "✅ No certificates expiring in the next ${params.DAYS_WARNING} days"
+
+                        // Build positive Service Log message
+                        def message = """SSL/TLS Certificate Health Check - All Certificates Valid
+
+SUMMARY:
+All SSL/TLS certificates are valid with sufficient time before expiration. No certificates expiring within the next ${params.DAYS_WARNING} days.
+
+CERTIFICATE STATUS:
+✅ All TLS secrets checked and verified
+✅ No certificates approaching expiration (${params.DAYS_WARNING}+ days remaining)
+✅ No immediate renewal actions required
+
+VERIFICATION PERFORMED:
+• Scanned all kubernetes.io/tls type secrets across all namespaces
+• Verified certificate expiration dates
+• Confirmed all certificates have > ${params.DAYS_WARNING} days validity
+
+NEXT STEPS:
+✅ No action required - all certificates are valid
+✅ Continue regular monitoring
+✅ Next automated check will run in 6 days
+
+MONITORING DETAILS:
+• Check Type: Automated Certificate Expiration Check
+• Warning Threshold: ${params.DAYS_WARNING} days
+• Check Date: ${new Date().format('yyyy-MM-dd HH:mm:ss')} UTC
+• Next Check: Scheduled in 6 days
+
+SEVERITY: Info
+This is a routine certificate health confirmation. No expiration concerns detected.
+"""
+
+                        echo message
+
+                        sh """
+                            ./utils/send-service-log.sh \\
+                                '${params.CLUSTER_ID}' \\
+                                'Info' \\
+                                'SSL/TLS Certificate Health Check - All Certificates Valid' \\
+                                '${message.replaceAll("'", "'\\''")}'
+                        """
+
                         currentBuild.result = 'SUCCESS'
                     }
                 }
