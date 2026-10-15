@@ -99,11 +99,9 @@ Proactive monitoring to prevent storage-related outages.
                         echo message
 
                         sh """
-                            ./utils/send-service-log.sh \\
-                                '${params.CLUSTER_ID}' \\
-                                'Warning' \\
-                                'High PVC Growth Detected (${pvcCount} affected)' \\
-                                '${message.replaceAll("'", "'\\''")}'
+                            ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Warning' 'High PVC Growth Detected (${pvcCount} affected)' <<'EOFMSG'
+\${message}
+EOFMSG
                         """
 
                         currentBuild.result = 'UNSTABLE'
@@ -150,11 +148,9 @@ This is a routine storage health confirmation. No growth concerns detected.
                         echo message
 
                         sh """
-                            ./utils/send-service-log.sh \\
-                                '${params.CLUSTER_ID}' \\
-                                'Info' \\
-                                'Storage Growth Health Check - Normal Growth Patterns' \\
-                                '${message.replaceAll("'", "'\\''")}'
+                            ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'Storage Growth Health Check - Normal Growth Patterns' <<'EOFMSG'
+\${message}
+EOFMSG
                         """
 
                         currentBuild.result = 'SUCCESS'

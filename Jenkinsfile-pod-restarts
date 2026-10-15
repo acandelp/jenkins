@@ -120,11 +120,9 @@ Requires investigation to prevent service degradation.
                         echo message
 
                         sh """
-                            ./utils/send-service-log.sh \\
-                                '${params.CLUSTER_ID}' \\
-                                'Warning' \\
-                                'Unstable Pods - Frequent Restarts (${podCount} affected)' \\
-                                '${message.replaceAll("'", "'\\''")}'
+                            ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Warning' 'Unstable Pods - Frequent Restarts (${podCount} affected)' <<'EOFMSG'
+\${message}
+EOFMSG
                         """
 
                         currentBuild.result = 'UNSTABLE'
@@ -170,11 +168,9 @@ This is a routine pod stability confirmation. No restart issues detected.
                         echo message
 
                         sh """
-                            ./utils/send-service-log.sh \\
-                                '${params.CLUSTER_ID}' \\
-                                'Info' \\
-                                'Pod Stability Health Check - All Pods Stable' \\
-                                '${message.replaceAll("'", "'\\''")}'
+                            ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'Pod Stability Health Check - All Pods Stable' <<'EOFMSG'
+\${message}
+EOFMSG
                         """
 
                         currentBuild.result = 'SUCCESS'

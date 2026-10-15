@@ -127,11 +127,9 @@ Memory issues can cause service instability and data loss.
                         echo message
 
                         sh """
-                            ./utils/send-service-log.sh \\
-                                '${params.CLUSTER_ID}' \\
-                                'Warning' \\
-                                'OOMKilled Events Detected (${oomCount} occurrences)' \\
-                                '${message.replaceAll("'", "'\\''")}'
+                            ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Warning' 'OOMKilled Events Detected (${oomCount} occurrences)' <<'EOFMSG'
+\${message}
+EOFMSG
                         """
 
                         currentBuild.result = 'UNSTABLE'
@@ -177,11 +175,9 @@ This is a routine memory health confirmation. No OOM issues detected.
                         echo message
 
                         sh """
-                            ./utils/send-service-log.sh \\
-                                '${params.CLUSTER_ID}' \\
-                                'Info' \\
-                                'Memory Health Check - No OOM Issues Detected' \\
-                                '${message.replaceAll("'", "'\\''")}'
+                            ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'Memory Health Check - No OOM Issues Detected' <<'EOFMSG'
+\${message}
+EOFMSG
                         """
 
                         currentBuild.result = 'SUCCESS'

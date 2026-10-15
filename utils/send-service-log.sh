@@ -2,12 +2,15 @@
 set -euo pipefail
 
 # Simple wrapper for sending service logs
-# Usage: ./send-service-log.sh CLUSTER_ID SEVERITY SUMMARY DESCRIPTION
+# Usage: echo "DESCRIPTION" | ./send-service-log.sh CLUSTER_ID SEVERITY SUMMARY
+# Or: ./send-service-log.sh CLUSTER_ID SEVERITY SUMMARY < description.txt
 
 CLUSTER_ID=$1
 SEVERITY=$2
 SUMMARY=$3
-DESCRIPTION=$4
+
+# Read description from stdin
+DESCRIPTION=$(cat)
 
 echo "Sending Service Log to cluster $CLUSTER_ID..." >&2
 echo "Severity: $SEVERITY" >&2

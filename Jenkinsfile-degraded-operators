@@ -143,11 +143,9 @@ Requires immediate investigation to ensure cluster stability.
                         echo message
 
                         sh """
-                            ./utils/send-service-log.sh \\
-                                '${params.CLUSTER_ID}' \\
-                                'Warning' \\
-                                'Degraded Cluster Operators (${operatorCount} affected)' \\
-                                '${message.replaceAll("'", "'\\''")}'
+                            ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Warning' 'Degraded Cluster Operators (${operatorCount} affected)' <<'EOFMSG'
+${message}
+EOFMSG
                         """
 
                         currentBuild.result = 'UNSTABLE'
@@ -188,11 +186,9 @@ This is a routine health confirmation. No issues detected.
                         echo message
 
                         sh """
-                            ./utils/send-service-log.sh \\
-                                '${params.CLUSTER_ID}' \\
-                                'Info' \\
-                                'Cluster Health Check - All Operators Healthy' \\
-                                '${message.replaceAll("'", "'\\''")}'
+                            ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Info' 'Cluster Health Check - All Operators Healthy' <<'EOFMSG'
+${message}
+EOFMSG
                         """
 
                         currentBuild.result = 'SUCCESS'

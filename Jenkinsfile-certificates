@@ -93,11 +93,9 @@ This is a proactive notification to prevent service disruptions.
 
                         // Send Service Log
                         sh """
-                            ./utils/send-service-log.sh \\
-                                '${params.CLUSTER_ID}' \\
-                                'Warning' \\
-                                'SSL/TLS Certificates Expiring Soon (${certCount} found)' \\
-                                '${message.replaceAll("'", "'\\''")}'
+                            ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Warning' 'SSL/TLS Certificates Expiring Soon (${certCount} found)' <<'EOFMSG'
+\${message}
+EOFMSG
                         """
 
                         currentBuild.result = 'UNSTABLE'
@@ -138,11 +136,9 @@ This is a routine certificate health confirmation. No expiration concerns detect
                         echo message
 
                         sh """
-                            ./utils/send-service-log.sh \\
-                                '${params.CLUSTER_ID}' \\
-                                'Info' \\
-                                'SSL/TLS Certificate Health Check - All Certificates Valid' \\
-                                '${message.replaceAll("'", "'\\''")}'
+                            ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'SSL/TLS Certificate Health Check - All Certificates Valid' <<'EOFMSG'
+\${message}
+EOFMSG
                         """
 
                         currentBuild.result = 'SUCCESS'

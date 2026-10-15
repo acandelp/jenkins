@@ -106,11 +106,9 @@ Action required to prevent deployment failures.
                         echo message
 
                         sh """
-                            ./utils/send-service-log.sh \\
-                                '${params.CLUSTER_ID}' \\
-                                'Warning' \\
-                                'Resource Quotas Approaching Limits (${quotaCount} affected)' \\
-                                '${message.replaceAll("'", "'\\''")}'
+                            ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Warning' 'Resource Quotas Approaching Limits (${quotaCount} affected)' <<'EOFMSG'
+\${message}
+EOFMSG
                         """
 
                         currentBuild.result = 'UNSTABLE'
@@ -156,11 +154,9 @@ This is a routine quota health confirmation. No capacity concerns detected.
                         echo message
 
                         sh """
-                            ./utils/send-service-log.sh \\
-                                '${params.CLUSTER_ID}' \\
-                                'Info' \\
-                                'Resource Quota Health Check - All Quotas Healthy' \\
-                                '${message.replaceAll("'", "'\\''")}'
+                            ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'Resource Quota Health Check - All Quotas Healthy' <<'EOFMSG'
+\${message}
+EOFMSG
                         """
 
                         currentBuild.result = 'SUCCESS'
