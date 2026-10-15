@@ -18,21 +18,24 @@ echo "Summary: $SUMMARY" >&2
 echo "" >&2
 
 # Build JSON payload using jq and pipe to ocm post
-# --yes: Skip confirmation prompt
+# Send both JSON and "y" confirmation to stdin using grouped commands
 # Format response with jq for readability
-jq -n \
-  --arg cluster_uuid "$CLUSTER_ID" \
-  --arg severity "$SEVERITY" \
-  --arg service_name "SREManualAction" \
-  --arg summary "$SUMMARY" \
-  --arg description "$DESCRIPTION" \
-  '{
-    cluster_uuid: $cluster_uuid,
-    severity: $severity,
-    service_name: $service_name,
-    summary: $summary,
-    description: $description
-  }' | ocm post /api/service_logs/v1/cluster_logs --yes | jq -r '
+{
+  jq -n \
+    --arg cluster_uuid "$CLUSTER_ID" \
+    --arg severity "$SEVERITY" \
+    --arg service_name "SREManualAction" \
+    --arg summary "$SUMMARY" \
+    --arg description "$DESCRIPTION" \
+    '{
+      cluster_uuid: $cluster_uuid,
+      severity: $severity,
+      service_name: $service_name,
+      summary: $summary,
+      description: $description
+    }'
+  echo y
+} | ocm post /api/service_logs/v1/cluster_logs | jq -r '
   if .items then
     .items[] |
     "✅ Service Log Created Successfully
