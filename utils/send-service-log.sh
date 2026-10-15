@@ -18,9 +18,9 @@ echo "Summary: $SUMMARY" >&2
 echo "" >&2
 
 # Build JSON payload using jq and pipe to ocm post
-# Send both JSON and "y" confirmation to stdin using grouped commands
+# Use process substitution for JSON body + yes for auto-confirmation
 # Format response with jq for readability
-{
+yes | ocm post /api/service_logs/v1/cluster_logs < <(
   jq -n \
     --arg cluster_uuid "$CLUSTER_ID" \
     --arg severity "$SEVERITY" \
@@ -34,8 +34,7 @@ echo "" >&2
       summary: $summary,
       description: $description
     }'
-  echo y
-} | ocm post /api/service_logs/v1/cluster_logs | jq -r '
+) | jq -r '
   if .items then
     .items[] |
     "✅ Service Log Created Successfully
