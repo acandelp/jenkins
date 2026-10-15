@@ -5,6 +5,10 @@ pipeline {
         string(name: 'CLUSTER_ID', defaultValue: '', description: 'Cluster ID to check')
     }
 
+    environment {
+        PATH = "${env.HOME}/.local/bin/backplane/latest:${env.HOME}/.local/bin:/usr/local/bin:${env.PATH}"
+    }
+
     stages {
         stage('Checkout') {
             steps {

@@ -6,6 +6,10 @@ pipeline {
         string(name: 'TOP_N', defaultValue: '5', description: 'Number of top consumers to report')
     }
 
+    environment {
+        PATH = "${env.HOME}/.local/bin/backplane/latest:${env.HOME}/.local/bin:/usr/local/bin:${env.PATH}"
+    }
+
     stages {
         stage('Checkout') {
             steps {

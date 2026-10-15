@@ -6,6 +6,10 @@ pipeline {
         string(name: 'RESTART_THRESHOLD', defaultValue: '10', description: 'Restart count threshold')
     }
 
+    environment {
+        PATH = "${env.HOME}/.local/bin/backplane/latest:${env.HOME}/.local/bin:/usr/local/bin:${env.PATH}"
+    }
+
     stages {
         stage('Checkout') {
             steps {

@@ -6,6 +6,10 @@ pipeline {
         string(name: 'DAYS_WARNING', defaultValue: '60', description: 'Days before expiry to warn')
     }
 
+    environment {
+        PATH = "${env.HOME}/.local/bin/backplane/latest:${env.HOME}/.local/bin:/usr/local/bin:${env.PATH}"
+    }
+
     stages {
         stage('Checkout') {
             steps {

@@ -6,6 +6,10 @@ pipeline {
         string(name: 'LOOKBACK_DAYS', defaultValue: '6', description: 'Days to look back')
     }
 
+    environment {
+        PATH = "${env.HOME}/.local/bin/backplane/latest:${env.HOME}/.local/bin:/usr/local/bin:${env.PATH}"
+    }
+
     stages {
         stage('Checkout') {
             steps {

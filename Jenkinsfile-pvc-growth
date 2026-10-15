@@ -6,6 +6,10 @@ pipeline {
         string(name: 'GROWTH_THRESHOLD', defaultValue: '20', description: 'Growth % threshold (6 days)')
     }
 
+    environment {
+        PATH = "${env.HOME}/.local/bin/backplane/latest:${env.HOME}/.local/bin:/usr/local/bin:${env.PATH}"
+    }
+
     stages {
         stage('Checkout') {
             steps {

@@ -6,6 +6,10 @@ pipeline {
         string(name: 'USAGE_THRESHOLD', defaultValue: '85', description: 'Usage % threshold')
     }
 
+    environment {
+        PATH = "${env.HOME}/.local/bin/backplane/latest:${env.HOME}/.local/bin:/usr/local/bin:${env.PATH}"
+    }
+
     stages {
         stage('Checkout') {
             steps {
