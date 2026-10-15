@@ -175,7 +175,7 @@ This is a routine pod stability confirmation. No restart issues detected.
                             writeFile file: 'service-log-message.txt', text: message
 
                             sh """
-                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'Pod Stability Health Check - All Pods Stable'
+                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Low' 'Pod Stability Health Check - All Pods Stable'
                             """
                         """
 

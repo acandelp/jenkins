@@ -147,7 +147,7 @@ This is an informational notification for planning purposes.
                             writeFile file: 'service-log-message.txt', text: message
 
                             sh """
-                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'Cluster Upgrade Available: ${currentVersion} → ${upgrades[0]}'
+                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Low' 'Cluster Upgrade Available: ${currentVersion} → ${upgrades[0]}'
                             """
                         """
 
@@ -210,7 +210,7 @@ This is a routine version status confirmation. Cluster is up to date.
                             writeFile file: 'service-log-message.txt', text: message
 
                             sh """
-                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'Cluster Version Status - Up to Date'
+                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Low' 'Cluster Version Status - Up to Date'
                             """
                         """
 

@@ -161,7 +161,7 @@ This is a routine quota health confirmation. No capacity concerns detected.
                             writeFile file: 'service-log-message.txt', text: message
 
                             sh """
-                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'Resource Quota Health Check - All Quotas Healthy'
+                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Low' 'Resource Quota Health Check - All Quotas Healthy'
                             """
                         """
 

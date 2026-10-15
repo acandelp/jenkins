@@ -183,7 +183,7 @@ Regular capacity planning and optimization report.
                             writeFile file: 'service-log-message.txt', text: message
 
                             sh """
-                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'Resource Consumption Report (Top ${params.TOP_N})'
+                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Low' 'Resource Consumption Report (Top ${params.TOP_N})'
                             """
                         """
 
@@ -238,7 +238,7 @@ This is informational. Metrics data temporarily unavailable.
                             writeFile file: 'service-log-message.txt', text: message
 
                             sh """
-                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'Resource Consumption Report - Data Unavailable'
+                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Low' 'Resource Consumption Report - Data Unavailable'
                             """
                         """
 

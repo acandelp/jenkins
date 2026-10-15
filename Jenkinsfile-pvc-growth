@@ -155,7 +155,7 @@ This is a routine storage health confirmation. No growth concerns detected.
                             writeFile file: 'service-log-message.txt', text: message
 
                             sh """
-                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'Storage Growth Health Check - Normal Growth Patterns'
+                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Low' 'Storage Growth Health Check - Normal Growth Patterns'
                             """
                         """
 

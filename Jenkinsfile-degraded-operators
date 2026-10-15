@@ -197,7 +197,7 @@ This is a routine health confirmation. No issues detected.
                         writeFile file: 'service-log-message.txt', text: message
 
                         sh """
-                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Info' 'Cluster Health Check - All Operators Healthy'
+                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Low' 'Cluster Health Check - All Operators Healthy'
                         """
 
                         currentBuild.result = 'SUCCESS'

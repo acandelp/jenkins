@@ -140,7 +140,7 @@ This is a routine certificate health confirmation. No expiration concerns detect
                             writeFile file: 'service-log-message.txt', text: message
 
                             sh """
-                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'SSL/TLS Certificate Health Check - All Certificates Valid'
+                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Low' 'SSL/TLS Certificate Health Check - All Certificates Valid'
                             """
                         """
 
