@@ -65,79 +65,18 @@ pipeline {
                             }
                         }
 
-                        // Build detailed Service Log message
-                        def message = """OpenShift Cluster Upgrade Available
+                        // Build customer-friendly Service Log message
+                        def upgradeList = upgrades.collect { "  • ${it}" }.join('\n')
 
-SUMMARY:
-New OpenShift version(s) available for upgrade.
+                        def message = """A new OpenShift version is available for your cluster.
 
-CURRENT CLUSTER STATE:
-• Current Version: ${currentVersion}
-• Update Channel: ${channel}
-• Upgrade Status: Updates available
+Current version: ${currentVersion}
+Available upgrade(s):
+${upgradeList}
 
-AVAILABLE UPGRADES:
-"""
+This upgrade includes security patches, bug fixes, and new features. If you would like to schedule an upgrade, please open a support case and we will coordinate a maintenance window with you.
 
-                        upgrades.each { version ->
-                            message += "• ${version}\n"
-                        }
-
-                        message += """
-UPGRADE BENEFITS:
-- Security patches and CVE fixes
-- Bug fixes and stability improvements
-- New features and enhancements
-- Performance optimizations
-- Extended support lifecycle
-
-PRE-UPGRADE CHECKLIST:
-1. Review OpenShift ${upgrades[0]} release notes:
-   https://docs.openshift.com/container-platform/
-
-2. Check upgrade compatibility:
-   - Deprecated API usage
-   - Custom operators compatibility
-   - Third-party integrations
-
-3. Verify cluster health:
-   'oc get clusteroperators'
-   'oc get nodes'
-   - All operators should be Available=True
-   - All nodes should be Ready
-
-4. Backup critical data:
-   - etcd backup
-   - PersistentVolume snapshots if needed
-   - Configuration backups
-
-5. Plan maintenance window:
-   - Control plane upgrade: ~1 hour
-   - Worker nodes: rolling upgrade, minimal disruption
-   - Schedule during low-traffic period
-
-UPGRADE PROCESS:
-1. Update channel (if needed):
-   'oc adm upgrade channel <channel-name>'
-
-2. Initiate upgrade:
-   'oc adm upgrade --to=${upgrades[0]}'
-
-3. Monitor progress:
-   'oc get clusterversion'
-   'watch oc get clusteroperators'
-   'watch oc get nodes'
-
-4. Verify completion:
-   'oc get clusterversion -o json | jq .status.conditions'
-
-ROLLBACK CONSIDERATIONS:
-- OpenShift does not support rollback after upgrade
-- Ensure testing in non-production environment first
-- Have recovery plan ready
-
-SEVERITY: Info
-This is an informational notification for planning purposes.
+No immediate action is required.
 """
 
                         echo message
@@ -166,41 +105,12 @@ This is an informational notification for planning purposes.
                             returnStdout: true
                         ).trim()
 
-                        // Build positive Service Log message
-                        def message = """Cluster Version Status - Up to Date
+                        // Build customer-friendly Service Log message
+                        def message = """Your cluster is running the latest available version (${currentVersion}).
 
-SUMMARY:
-Cluster is running the latest available version. No upgrades currently available.
+No new upgrades are currently available. We will notify you when new OpenShift versions become available for your cluster.
 
-CURRENT CLUSTER STATE:
-✅ Current Version: ${currentVersion}
-✅ Update Channel: ${channel}
-✅ Cluster is up to date with the latest release
-
-VERSION STATUS:
-• No new OpenShift versions available in current channel
-• Cluster is running latest stable release
-• All security patches and updates applied
-
-UPGRADE READINESS:
-• Cluster is healthy and ready for future upgrades when available
-• Update channel is configured correctly
-• Automated checks will notify when upgrades become available
-
-NEXT STEPS:
-✅ No action required - cluster is current
-✅ Continue regular monitoring for new releases
-✅ Next automated check will run in 6 days
-
-MONITORING DETAILS:
-• Check Type: Automated Upgrade Availability Check
-• Current Version: ${currentVersion}
-• Update Channel: ${channel}
-• Check Date: ${new Date().format('yyyy-MM-dd HH:mm:ss')} UTC
-• Next Check: Scheduled in 6 days
-
-SEVERITY: Info
-This is a routine version status confirmation. Cluster is up to date.
+No action is required.
 """
 
                         echo message

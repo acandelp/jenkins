@@ -50,43 +50,24 @@ pipeline {
                     if (results) {
                         echo "⚠️  Found certificates expiring soon"
 
-                        // Build detailed Service Log message
+                        // Build customer-friendly Service Log message
                         def certCount = results.split('\n').size()
-                        def message = """SSL/TLS Certificate Expiration Alert
-
-SUMMARY:
-Found ${certCount} certificate(s) expiring within the next ${params.DAYS_WARNING} days.
-
-CERTIFICATES EXPIRING:
-"""
+                        def certList = ""
 
                         results.split('\n').each { line ->
                             def parts = line.split('\\|')
                             def namespace = parts[0]
                             def secretName = parts[1]
                             def daysLeft = parts[2]
-                            def expiryDate = parts[3]
-
-                            message += """
-• Namespace: ${namespace}
-  Secret: ${secretName}
-  Days Remaining: ${daysLeft} days
-  Expiration Date: ${expiryDate}
-"""
+                            certList += "  • ${namespace}/${secretName} (expires in ${daysLeft} days)\n"
                         }
 
-                        message += """
-IMPACT:
-Certificate expiration can cause service interruptions, TLS handshake failures, and application downtime.
+                        def message = """We found ${certCount} SSL/TLS certificate(s) expiring within the next ${params.DAYS_WARNING} days:
 
-RECOMMENDED ACTIONS:
-1. Verify certificate renewal process is in place
-2. Coordinate certificate renewal with application teams
-3. Update secrets with renewed certificates before expiration
-4. Test applications after certificate renewal
+${certList}
+Please ensure these certificates are renewed before expiration to prevent service interruptions.
 
-SEVERITY: Warning
-This is a proactive notification to prevent service disruptions.
+If you need assistance with certificate renewal, please open a support case.
 """
 
                         echo message
@@ -102,35 +83,12 @@ This is a proactive notification to prevent service disruptions.
                     } else {
                         echo "✅ No certificates expiring in the next ${params.DAYS_WARNING} days"
 
-                        // Build positive Service Log message
-                        def message = """SSL/TLS Certificate Health Check - All Certificates Valid
+                        // Build customer-friendly Service Log message
+                        def message = """Your cluster SSL/TLS certificates are valid and healthy.
 
-SUMMARY:
-All SSL/TLS certificates are valid with sufficient time before expiration. No certificates expiring within the next ${params.DAYS_WARNING} days.
+We checked all certificates in your cluster and confirmed none are expiring within the next ${params.DAYS_WARNING} days.
 
-CERTIFICATE STATUS:
-✅ All TLS secrets checked and verified
-✅ No certificates approaching expiration (${params.DAYS_WARNING}+ days remaining)
-✅ No immediate renewal actions required
-
-VERIFICATION PERFORMED:
-• Scanned all kubernetes.io/tls type secrets across all namespaces
-• Verified certificate expiration dates
-• Confirmed all certificates have > ${params.DAYS_WARNING} days validity
-
-NEXT STEPS:
-✅ No action required - all certificates are valid
-✅ Continue regular monitoring
-✅ Next automated check will run in 6 days
-
-MONITORING DETAILS:
-• Check Type: Automated Certificate Expiration Check
-• Warning Threshold: ${params.DAYS_WARNING} days
-• Check Date: ${new Date().format('yyyy-MM-dd HH:mm:ss')} UTC
-• Next Check: Scheduled in 6 days
-
-SEVERITY: Info
-This is a routine certificate health confirmation. No expiration concerns detected.
+No action is required. We will continue monitoring and notify you if any certificates need renewal.
 """
 
                         echo message

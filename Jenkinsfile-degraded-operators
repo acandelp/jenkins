@@ -61,90 +61,23 @@ pipeline {
                     if (results) {
                         echo "⚠️  Found degraded cluster operators"
 
-                        // Build detailed Service Log message
+                        // Build customer-friendly Service Log message
                         def operatorCount = results.split('\n').size()
-                        def message = """Degraded Cluster Operators Detected
-
-SUMMARY:
-Found ${operatorCount} cluster operator(s) in degraded state within the last ${params.LOOKBACK_DAYS} days.
-
-DEGRADED OPERATORS:
-"""
+                        def operatorList = ""
 
                         results.split('\n').each { line ->
                             def parts = line.split('\\|', 3)
                             def operatorName = parts[0]
                             def ageDays = parts[1]
-                            def reason = parts[2]
-
-                            message += """
-• Operator: ${operatorName}
-  Degraded Since: ${ageDays} day(s) ago
-  Status: Degraded
-  Reason: ${reason}
-"""
+                            operatorList += "  • ${operatorName} (degraded for ${ageDays} day(s))\n"
                         }
 
-                        message += """
-IMPACT:
-Degraded operators can cause:
-- Core cluster functionality impairment
-- Failed deployments or builds
-- Networking issues
-- Monitoring/logging gaps
-- Storage provisioning failures
-- Authentication problems
-- Upgrade blocks (cannot upgrade with degraded operators)
+                        def message = """We detected ${operatorCount} cluster operator(s) in degraded state during our routine health check:
 
-DIAGNOSIS STEPS:
-1. Check operator detailed status:
-   'oc get clusteroperator <operator-name> -o yaml'
+${operatorList}
+Our SRE team is aware and investigating. This may impact certain cluster functions, but your workloads should continue running normally.
 
-2. Review operator conditions:
-   'oc get co <operator-name> -o jsonpath='{.status.conditions}' | jq .'
-
-3. Check operator pods:
-   'oc get pods -n openshift-<operator-namespace>'
-   'oc logs <pod> -n openshift-<operator-namespace>'
-
-4. Review cluster events:
-   'oc get events -A --sort-by=.lastTimestamp | grep <operator-name>'
-
-COMMON DEGRADED OPERATORS & FIXES:
-
-• authentication operator:
-  - Check OAuth pods: 'oc get pods -n openshift-authentication'
-  - Verify OAuth configuration: 'oc get oauth cluster -o yaml'
-
-• console operator:
-  - Check console pods: 'oc get pods -n openshift-console'
-  - Verify route: 'oc get route -n openshift-console'
-
-• ingress operator:
-  - Check router pods: 'oc get pods -n openshift-ingress'
-  - Verify IngressController: 'oc get ingresscontroller -n openshift-ingress-operator'
-
-• monitoring operator:
-  - Check Prometheus pods: 'oc get pods -n openshift-monitoring'
-  - Verify PVCs: 'oc get pvc -n openshift-monitoring'
-
-• network operator:
-  - Check network pods: 'oc get pods -n openshift-network-operator'
-  - Verify network config: 'oc get network.config cluster -o yaml'
-
-RECOMMENDED ACTIONS:
-1. Investigate root cause using diagnosis steps above
-2. Review recent cluster changes (upgrades, configuration)
-3. Check resource availability (CPU, memory, storage)
-4. Restart degraded operator pods if needed:
-   'oc delete pod <pod> -n <namespace>'
-5. Escalate to Red Hat Support if issue persists
-
-CLUSTER HEALTH:
-Degraded operators should be resolved before attempting cluster upgrades or major changes.
-
-SEVERITY: Warning
-Requires immediate investigation to ensure cluster stability.
+We will provide updates as we work to resolve this. If you notice any issues with your applications, please open a support case.
 """
 
                         echo message
@@ -161,34 +94,11 @@ Requires immediate investigation to ensure cluster stability.
                         echo "✅ No degraded operators in last ${params.LOOKBACK_DAYS} days"
 
                         // Build positive Service Log message
-                        def message = """Cluster Health Check - All Operators Healthy
+                        def message = """Your cluster operators are healthy and functioning normally.
 
-SUMMARY:
-All cluster operators are functioning normally. No degraded operators detected in the last ${params.LOOKBACK_DAYS} days.
+We performed our routine ${params.LOOKBACK_DAYS}-day health check and confirmed that all cluster operators are running as expected with no degraded components.
 
-CLUSTER OPERATORS STATUS:
-✅ All cluster operators are Available and not Degraded
-✅ No recent operator issues detected
-✅ Cluster control plane is healthy
-
-VERIFICATION PERFORMED:
-• Checked all cluster operators for degraded conditions
-• Reviewed operator status for the last ${params.LOOKBACK_DAYS} days
-• Verified no operators have transitioned to degraded state
-
-NEXT STEPS:
-✅ No action required - cluster operators are healthy
-✅ Continue regular monitoring
-✅ Next automated check will run in 6 days
-
-MONITORING DETAILS:
-• Check Type: Automated Health Check
-• Lookback Period: ${params.LOOKBACK_DAYS} days
-• Check Date: ${new Date().format('yyyy-MM-dd HH:mm:ss')} UTC
-• Next Check: Scheduled in 6 days
-
-SEVERITY: Info
-This is a routine health confirmation. No issues detected.
+No action is required on your part. We will continue monitoring and notify you if anything requires attention.
 """
 
                         echo message
