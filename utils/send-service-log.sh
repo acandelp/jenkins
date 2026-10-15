@@ -18,9 +18,9 @@ echo "Summary: $SUMMARY" >&2
 echo "" >&2
 
 # Build JSON payload using jq and pipe to ocm post
-# Use process substitution for JSON body + yes for auto-confirmation
+# Use process substitution for JSON body + echo y for auto-confirmation
 # Format response with jq for readability
-yes | ocm post /api/service_logs/v1/cluster_logs < <(
+echo y | ocm post /api/service_logs/v1/cluster_logs < <(
   jq -n \
     --arg cluster_uuid "$CLUSTER_ID" \
     --arg severity "$SEVERITY" \
