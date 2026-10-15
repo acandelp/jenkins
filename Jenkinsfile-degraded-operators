@@ -149,10 +149,11 @@ Requires immediate investigation to ensure cluster stability.
 
                         echo message
 
+                        // Write message to temporary file to avoid argument length issues
+                        writeFile file: 'service-log-message.txt', text: message
+
                         sh """
-                            ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Warning' 'Degraded Cluster Operators (${operatorCount} affected)' <<'EOFMSG'
-${message}
-EOFMSG
+                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Warning' 'Degraded Cluster Operators (${operatorCount} affected)'
                         """
 
                         currentBuild.result = 'UNSTABLE'
@@ -192,10 +193,11 @@ This is a routine health confirmation. No issues detected.
 
                         echo message
 
+                        // Write message to temporary file to avoid argument length issues
+                        writeFile file: 'service-log-message.txt', text: message
+
                         sh """
-                            ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Info' 'Cluster Health Check - All Operators Healthy' <<'EOFMSG'
-${message}
-EOFMSG
+                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Info' 'Cluster Health Check - All Operators Healthy'
                         """
 
                         currentBuild.result = 'SUCCESS'

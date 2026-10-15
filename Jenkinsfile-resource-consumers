@@ -179,9 +179,12 @@ Regular capacity planning and optimization report.
                         echo message
 
                         sh """
-                            ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'Resource Consumption Report (Top ${params.TOP_N})' <<'EOFMSG'
-\${message}
-EOFMSG
+                            // Write message to temporary file to avoid argument length issues
+                            writeFile file: 'service-log-message.txt', text: message
+
+                            sh """
+                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'Resource Consumption Report (Top ${params.TOP_N})'
+                            """
                         """
 
                         currentBuild.result = 'SUCCESS'
@@ -231,9 +234,12 @@ This is informational. Metrics data temporarily unavailable.
                         echo message
 
                         sh """
-                            ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'Resource Consumption Report - Data Unavailable' <<'EOFMSG'
-\${message}
-EOFMSG
+                            // Write message to temporary file to avoid argument length issues
+                            writeFile file: 'service-log-message.txt', text: message
+
+                            sh """
+                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'Resource Consumption Report - Data Unavailable'
+                            """
                         """
 
                         currentBuild.result = 'SUCCESS'

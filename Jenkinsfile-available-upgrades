@@ -143,9 +143,12 @@ This is an informational notification for planning purposes.
                         echo message
 
                         sh """
-                            ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'Cluster Upgrade Available: ${currentVersion} → ${upgrades[0]}' <<'EOFMSG'
-\${message}
-EOFMSG
+                            // Write message to temporary file to avoid argument length issues
+                            writeFile file: 'service-log-message.txt', text: message
+
+                            sh """
+                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'Cluster Upgrade Available: ${currentVersion} → ${upgrades[0]}'
+                            """
                         """
 
                         currentBuild.result = 'SUCCESS'
@@ -203,9 +206,12 @@ This is a routine version status confirmation. Cluster is up to date.
                         echo message
 
                         sh """
-                            ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'Cluster Version Status - Up to Date' <<'EOFMSG'
-\${message}
-EOFMSG
+                            // Write message to temporary file to avoid argument length issues
+                            writeFile file: 'service-log-message.txt', text: message
+
+                            sh """
+                                cat service-log-message.txt | ./utils/send-service-log.sh '\${params.CLUSTER_ID}' 'Info' 'Cluster Version Status - Up to Date'
+                            """
                         """
 
                         currentBuild.result = 'SUCCESS'
