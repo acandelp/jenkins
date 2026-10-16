@@ -1,0 +1,129 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'CLUSTER_ID', defaultValue: '', description: 'Cluster ID to check')
+        string(name: 'THRESHOLD', defaultValue: '70', description: 'Resource usage threshold percentage (default: 70%)')
+    }
+
+    environment {
+        PATH = "${env.HOME}/.local/bin/backplane/latest:${env.HOME}/.local/bin:/usr/local/bin:${env.PATH}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Backplane Login') {
+            steps {
+                script {
+                    echo "Setting up Backplane authentication..."
+
+                    if (!params.CLUSTER_ID) {
+                        error("CLUSTER_ID parameter is required")
+                    }
+
+                    sh """
+                        export PATH=\${HOME}/.local/bin/backplane/latest:\${PATH}
+                        ocm backplane login ${params.CLUSTER_ID}
+                    """
+
+                    echo "✅ Backplane login successful"
+                }
+            }
+        }
+
+        stage('Setup') {
+            steps {
+                sh 'chmod +x scripts/*.sh utils/*.sh'
+            }
+        }
+
+        stage('Check Node Resources') {
+            steps {
+                script {
+                    def results = sh(
+                        script: "./scripts/check-node-resources.sh ${params.THRESHOLD}",
+                        returnStdout: true
+                    ).trim()
+
+                    if (results) {
+                        echo "⚠️  Found nodes exceeding ${params.THRESHOLD}% resource usage"
+
+                        // Parse results and build detailed message
+                        def nodeCount = results.split('\n').size()
+                        def nodeDetails = []
+
+                        results.split('\n').each { line ->
+                            def parts = line.split('\\|')
+                            def nodeName = parts[0]
+                            def cpuPercent = parts[1]
+                            def memPercent = parts[2]
+
+                            def issues = []
+                            if (cpuPercent.toFloat() >= params.THRESHOLD.toFloat()) {
+                                issues << "CPU: ${cpuPercent}%"
+                            }
+                            if (memPercent.toFloat() >= params.THRESHOLD.toFloat()) {
+                                issues << "Memory: ${memPercent}%"
+                            }
+
+                            nodeDetails << "${nodeName} (${issues.join(', ')})"
+                        }
+
+                        def message = "Detected ${nodeCount} node(s) exceeding ${params.THRESHOLD}% resource usage threshold: ${nodeDetails.join(', ')}."
+
+                        echo message
+
+                        // Write message to temporary file to avoid argument length issues
+                        writeFile file: 'service-log-message.txt', text: message
+
+                        sh """
+                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Warning' 'High Node Resource Usage Detected (${nodeCount} node(s))'
+                        """
+
+                        currentBuild.result = 'UNSTABLE'
+                    } else {
+                        echo "✅ All nodes below ${params.THRESHOLD}% resource usage threshold"
+
+                        // Build positive Service Log message
+                        def message = "All cluster nodes are operating within normal resource usage limits (below ${params.THRESHOLD}% threshold for both CPU and memory). Cluster performance is healthy. No action required."
+
+                        echo message
+
+                        // Write message to temporary file to avoid argument length issues
+                        writeFile file: 'service-log-message.txt', text: message
+
+                        sh """
+                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Low' 'Node Resources Healthy'
+                        """
+
+                        currentBuild.result = 'SUCCESS'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                // Cleanup: Logout from backplane
+                sh '''
+                    export PATH=${HOME}/.local/bin/backplane/latest:${PATH}
+                    ocm backplane logout || true
+                '''
+                echo "🔒 Backplane session closed"
+            }
+        }
+        failure {
+            echo "❌ Pipeline failed - check cluster access and metrics availability"
+        }
+        success {
+            echo "✅ Node resource check completed successfully"
+        }
+    }
+}
