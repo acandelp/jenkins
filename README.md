@@ -64,7 +64,53 @@ CLUSTER_ID=<cluster-id> THRESHOLD=80 ./Jenkinsfile-node-resources
 
 ---
 
-### 2. Degraded Operators Check (`Jenkinsfile-degraded-operators`)
+### 2. Node Resource Limits Check (`Jenkinsfile-node-limits`)
+
+**Purpose**: Monitor node-level resource limits (CPU and memory) and alert when allocations exceed capacity.
+
+**Parameters**:
+- `CLUSTER_ID` (required): The cluster ID to check
+- `THRESHOLD` (default: 100): Resource limits threshold percentage
+
+**Behavior**:
+- Checks all nodes using `oc describe nodes` to analyze allocated resource limits
+- If any node has limits exceeding the threshold (CPU OR memory):
+  - Sends a **Warning** Service Log listing affected nodes with their limit percentages
+  - Sets build status to UNSTABLE
+- If all nodes have limits below the threshold:
+  - Sends a **Low** severity Service Log confirming healthy limits
+  - Sets build status to SUCCESS
+
+**Example Service Logs**:
+
+*Limits Exceeded:*
+```
+Severity: Warning
+Summary: Node Resource Limits Exceeded (2 node(s))
+Description: Detected 2 node(s) with resource limits exceeding 100%: 
+worker-1 (CPU: 125%, Memory: 110%), worker-2 (CPU: 105%).
+```
+
+*Healthy Status:*
+```
+Severity: Low
+Summary: Node Resource Limits Healthy
+Description: All cluster nodes have resource limits below 100%. 
+Node capacity allocation is within acceptable ranges. No action required.
+```
+
+**Usage**:
+```bash
+# Run with default 100% threshold
+CLUSTER_ID=<cluster-id> ./Jenkinsfile-node-limits
+
+# Run with custom 90% threshold
+CLUSTER_ID=<cluster-id> THRESHOLD=90 ./Jenkinsfile-node-limits
+```
+
+---
+
+### 3. Degraded Operators Check (`Jenkinsfile-degraded-operators`)
 
 **Purpose**: Monitor cluster operators and alert when any are in a degraded state.
 
@@ -82,7 +128,7 @@ CLUSTER_ID=<cluster-id> THRESHOLD=80 ./Jenkinsfile-node-resources
 
 ---
 
-### 3. Resource Consumers Report (`Jenkinsfile-resource-consumers`)
+### 4. Resource Consumers Report (`Jenkinsfile-resource-consumers`)
 
 **Purpose**: Generate informational reports about top resource-consuming namespaces.
 
@@ -97,7 +143,7 @@ CLUSTER_ID=<cluster-id> THRESHOLD=80 ./Jenkinsfile-node-resources
 
 ---
 
-### 4. Account-Based Resource Consumers (`Jenkinsfile-account-resource-consumers`)
+### 5. Account-Based Resource Consumers (`Jenkinsfile-account-resource-consumers`)
 
 **Purpose**: Generate resource consumption reports for all clusters in an OCM account.
 
