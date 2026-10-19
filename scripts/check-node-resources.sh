@@ -20,8 +20,13 @@ oc adm top nodes --no-headers | awk -v threshold="$THRESHOLD" '
     gsub(/%/, "", cpu_percent)
     gsub(/%/, "", mem_percent)
 
+    # Force numeric comparison by adding 0
+    cpu_num = cpu_percent + 0
+    mem_num = mem_percent + 0
+    threshold_num = threshold + 0
+
     # Check if either CPU or memory exceeds threshold
-    if (cpu_percent >= threshold || mem_percent >= threshold) {
-        print node_name "|" cpu_percent "|" mem_percent
+    if (cpu_num >= threshold_num || mem_num >= threshold_num) {
+        print node_name "|" cpu_num "|" mem_num
     }
 }'
