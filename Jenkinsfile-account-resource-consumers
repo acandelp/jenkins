@@ -4,6 +4,8 @@ pipeline {
     parameters {
         string(name: 'ACCOUNT_NUMBER', defaultValue: '', description: 'Account Number (EBS Account ID) to check all clusters')
         string(name: 'TOP_N', defaultValue: '5', description: 'Number of top consumers to report')
+        string(name: 'CPU_THRESHOLD', defaultValue: '50', description: 'Total CPU cores threshold for warning (default: 50)')
+        string(name: 'MEMORY_THRESHOLD_GIB', defaultValue: '100', description: 'Total memory threshold in GiB for warning (default: 100)')
         choice(name: 'EXECUTION_MODE', choices: ['sequential', 'parallel'], description: 'Execute checks sequentially or in parallel')
     }
 
@@ -141,15 +143,50 @@ pipeline {
                                         def cpuFormatted = String.format("%.2f", totalCpu)
                                         def memFormatted = String.format("%.2f", totalMem)
 
-                                        def message = "[${cluster.name}] Resource consumption report (current usage): Top ${params.TOP_N} namespaces consuming ${cpuFormatted} CPU cores and ${memFormatted} GiB memory. Highest CPU consumers: ${topCpuNamespaces}. Highest memory consumers: ${topMemNamespaces}. This is an informational snapshot for capacity planning."
+                                        // Check against thresholds
+                                        def cpuThreshold = params.CPU_THRESHOLD.toFloat()
+                                        def memThreshold = params.MEMORY_THRESHOLD_GIB.toFloat()
+                                        def cpuExceeded = totalCpu >= cpuThreshold
+                                        def memExceeded = totalMem >= memThreshold
 
-                                        echo message
+                                        def message = ""
+                                        def severity = ""
+                                        def title = ""
+
+                                        if (cpuExceeded || memExceeded) {
+                                            // High resource consumption detected
+                                            def issues = []
+                                            if (cpuExceeded) {
+                                                issues << "CPU usage at ${cpuFormatted} cores (threshold: ${cpuThreshold} cores)"
+                                            }
+                                            if (memExceeded) {
+                                                issues << "Memory usage at ${memFormatted} GiB (threshold: ${memThreshold} GiB)"
+                                            }
+
+                                            message = "[${cluster.name}] High resource consumption detected: ${issues.join(', ')}. Top CPU consumers: ${topCpuNamespaces}. Top memory consumers: ${topMemNamespaces}. Review namespace resource usage and consider scaling or optimization."
+
+                                            severity = 'Moderate'
+                                            title = 'High Resource Consumption Detected'
+
+                                            echo "⚠️  ${message}"
+
+                                            // Mark this cluster check as unstable
+                                            unstable("High resource consumption in ${cluster.name}")
+                                        } else {
+                                            // Normal resource consumption
+                                            message = "[${cluster.name}] Resource consumption report (current usage): Top ${params.TOP_N} namespaces consuming ${cpuFormatted} CPU cores and ${memFormatted} GiB memory. Highest CPU consumers: ${topCpuNamespaces}. Highest memory consumers: ${topMemNamespaces}. All resources within normal thresholds (CPU < ${cpuThreshold} cores, Memory < ${memThreshold} GiB)."
+
+                                            severity = 'Low'
+                                            title = 'Resource Consumption Report'
+
+                                            echo "✅ ${message}"
+                                        }
 
                                         // Write and send service log
                                         writeFile file: "service-log-${cluster.id}.txt", text: message
 
                                         sh """
-                                            cat service-log-${cluster.id}.txt | ./utils/send-service-log.sh '${cluster.id}' 'Low' 'Resource Consumption Report'
+                                            cat service-log-${cluster.id}.txt | ./utils/send-service-log.sh '${cluster.id}' '${severity}' '${title}'
                                         """
 
                                         echo "✅ Report sent for ${cluster.name}"

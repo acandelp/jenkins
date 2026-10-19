@@ -4,6 +4,8 @@ pipeline {
     parameters {
         string(name: 'CLUSTER_ID', defaultValue: '', description: 'Cluster ID to check')
         string(name: 'TOP_N', defaultValue: '5', description: 'Number of top consumers to report')
+        string(name: 'CPU_THRESHOLD', defaultValue: '50', description: 'Total CPU cores threshold for warning (default: 50)')
+        string(name: 'MEMORY_THRESHOLD_GIB', defaultValue: '100', description: 'Total memory threshold in GiB for warning (default: 100)')
     }
 
     environment {
@@ -91,18 +93,50 @@ pipeline {
                         def cpuFormatted = String.format("%.2f", totalCpu)
                         def memFormatted = String.format("%.2f", totalMem)
 
-                        def message = "Resource consumption report (current usage): Top ${params.TOP_N} namespaces consuming ${cpuFormatted} CPU cores and ${memFormatted} GiB memory. Highest CPU consumers: ${topCpuNamespaces}. Highest memory consumers: ${topMemNamespaces}. This is an informational snapshot for capacity planning."
+                        // Check against thresholds
+                        def cpuThreshold = params.CPU_THRESHOLD.toFloat()
+                        def memThreshold = params.MEMORY_THRESHOLD_GIB.toFloat()
+                        def cpuExceeded = totalCpu >= cpuThreshold
+                        def memExceeded = totalMem >= memThreshold
 
-                        echo message
+                        def message = ""
+                        def severity = ""
+                        def title = ""
+
+                        if (cpuExceeded || memExceeded) {
+                            // High resource consumption detected
+                            def issues = []
+                            if (cpuExceeded) {
+                                issues << "CPU usage at ${cpuFormatted} cores (threshold: ${cpuThreshold} cores)"
+                            }
+                            if (memExceeded) {
+                                issues << "Memory usage at ${memFormatted} GiB (threshold: ${memThreshold} GiB)"
+                            }
+
+                            message = "High resource consumption detected: ${issues.join(', ')}. Top CPU consumers: ${topCpuNamespaces}. Top memory consumers: ${topMemNamespaces}. Review namespace resource usage and consider scaling or optimization."
+
+                            severity = 'Moderate'
+                            title = 'High Resource Consumption Detected'
+                            currentBuild.result = 'UNSTABLE'
+
+                            echo "⚠️  ${message}"
+                        } else {
+                            // Normal resource consumption
+                            message = "Resource consumption report (current usage): Top ${params.TOP_N} namespaces consuming ${cpuFormatted} CPU cores and ${memFormatted} GiB memory. Highest CPU consumers: ${topCpuNamespaces}. Highest memory consumers: ${topMemNamespaces}. All resources within normal thresholds (CPU < ${cpuThreshold} cores, Memory < ${memThreshold} GiB)."
+
+                            severity = 'Low'
+                            title = 'Resource Consumption Report'
+                            currentBuild.result = 'SUCCESS'
+
+                            echo "✅ ${message}"
+                        }
 
                         // Write message to temporary file to avoid argument length issues
                         writeFile file: 'service-log-message.txt', text: message
 
                         sh """
-                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Low' 'Resource Consumption Report'
+                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' '${severity}' '${title}'
                         """
-
-                        currentBuild.result = 'SUCCESS'
                     } else {
                         echo "⚠️  No resource consumption data available"
 
