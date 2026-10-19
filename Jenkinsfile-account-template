@@ -150,9 +150,9 @@ pipeline {
                                         writeFile file: "service-log-${cluster.id}.txt", text: message
 
                                         // CUSTOMIZE SEVERITY AND TITLE
-                                        // Severity options: 'Critical', 'Warning', 'Info', 'Low'
+                                        // Severity options: 'Critical', 'Moderate', 'Info', 'Low'
                                         sh """
-                                            cat service-log-${cluster.id}.txt | ./utils/send-service-log.sh '${cluster.id}' 'Warning' 'YOUR TITLE HERE'
+                                            cat service-log-${cluster.id}.txt | ./utils/send-service-log.sh '${cluster.id}' 'Moderate' 'YOUR TITLE HERE'
                                         """
 
                                         echo "✅ Service log sent for ${cluster.name}"
@@ -269,7 +269,7 @@ pipeline {
  * Script:
  *   ./scripts/check-certificates.sh
  *
- * Severity: 'Warning'
+ * Severity: 'Moderate'
  * Title: 'Certificate Expiration Warning'
  *
  * For Resource Quotas:
@@ -280,7 +280,7 @@ pipeline {
  * Script:
  *   ./scripts/check-quotas.sh ${params.QUOTA_THRESHOLD}
  *
- * Severity: 'Warning'
+ * Severity: 'Moderate'
  * Title: 'Resource Quota Warning'
  *
  * For Pod Restarts:
@@ -291,6 +291,6 @@ pipeline {
  * Script:
  *   ./scripts/check-pod-restarts.sh ${params.RESTART_THRESHOLD}
  *
- * Severity: 'Warning'
+ * Severity: 'Moderate'
  * Title: 'Pod Restart Warning'
  */

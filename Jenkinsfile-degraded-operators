@@ -71,7 +71,7 @@ pipeline {
                         writeFile file: 'service-log-message.txt', text: message
 
                         sh """
-                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Warning' 'Cluster Operators Degraded (${operatorCount})'
+                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Moderate' 'Cluster Operators Degraded (${operatorCount})'
                         """
 
                         currentBuild.result = 'UNSTABLE'

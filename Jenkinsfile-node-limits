@@ -82,7 +82,7 @@ pipeline {
                         writeFile file: 'service-log-message.txt', text: message
 
                         sh """
-                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Warning' 'Node Resource Limits Exceeded (${nodeCount} node(s))'
+                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Moderate' 'Node Resource Limits Exceeded (${nodeCount} node(s))'
                         """
 
                         currentBuild.result = 'UNSTABLE'
