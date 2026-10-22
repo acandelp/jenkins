@@ -184,7 +184,9 @@ CLUSTER_ID=<cluster-id> MIN_SEVERITY=info ./Jenkinsfile-firing-alerts
 
 **Special Notes**:
 - Requires elevated permissions (automatically requested via `ocm backplane elevate`)
-- Alert descriptions come from Prometheus annotations (summary or description)
+- Uses `amtool` (official AlertManager CLI) with fallback to direct API
+- **Watchdog alert is excluded** (it's a heartbeat alert that's always firing)
+- Alert descriptions come from Prometheus annotations (summary, description, or message)
 - Alerts are sorted by severity (critical first)
 - Namespaces shown when available (shows "N/A" for cluster-scoped alerts)
 
