@@ -3,7 +3,7 @@ pipeline {
 
     parameters {
         string(name: 'CLUSTER_ID', defaultValue: '', description: 'Cluster ID to check')
-        choice(name: 'MIN_SEVERITY', choices: ['info', 'warning', 'critical'], defaultValue: 'warning', description: 'Minimum alert severity to report')
+        choice(name: 'MIN_SEVERITY', choices: ['warning', 'info', 'critical'], description: 'Minimum alert severity to report')
     }
 
     environment {
