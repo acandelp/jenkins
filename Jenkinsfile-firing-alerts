@@ -1,0 +1,198 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'CLUSTER_ID', defaultValue: '', description: 'Cluster ID to check')
+        choice(name: 'MIN_SEVERITY', choices: ['info', 'warning', 'critical'], defaultValue: 'warning', description: 'Minimum alert severity to report')
+    }
+
+    environment {
+        PATH = "${env.HOME}/.local/bin/backplane/latest:${env.HOME}/.local/bin:/usr/local/bin:${env.PATH}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Backplane Login') {
+            steps {
+                script {
+                    echo "Setting up Backplane authentication..."
+
+                    if (!params.CLUSTER_ID) {
+                        error("CLUSTER_ID parameter is required")
+                    }
+
+                    sh """
+                        export PATH=\${HOME}/.local/bin/backplane/latest:\${PATH}
+                        ocm backplane login ${params.CLUSTER_ID}
+                    """
+
+                    echo "✅ Backplane login successful"
+                }
+            }
+        }
+
+        stage('Elevate Permissions') {
+            steps {
+                script {
+                    echo "Requesting elevated permissions to access cluster monitoring..."
+
+                    sh """
+                        export PATH=\${HOME}/.local/bin/backplane/latest:\${PATH}
+                        ocm backplane elevate '${params.CLUSTER_ID}' --reason "Automated SRE check: querying AlertManager for active firing alerts to send proactive Service Log to customer"
+                    """
+
+                    echo "✅ Elevated permissions granted"
+                }
+            }
+        }
+
+        stage('Setup') {
+            steps {
+                sh 'chmod +x scripts/*.sh utils/*.sh'
+            }
+        }
+
+        stage('Check Firing Alerts') {
+            steps {
+                script {
+                    def results = sh(
+                        script: "./scripts/check-firing-alerts.sh",
+                        returnStdout: true
+                    ).trim()
+
+                    if (results && !results.contains("No firing alerts found")) {
+                        echo "⚠️  Found active firing alerts"
+
+                        // Parse alerts and filter by severity
+                        def severityOrder = ['critical': 3, 'warning': 2, 'info': 1, 'unknown': 0]
+                        def minSevLevel = severityOrder[params.MIN_SEVERITY] ?: 2
+
+                        def allAlerts = []
+                        results.split('\n').each { line ->
+                            def parts = line.split('\\|', 4)
+                            if (parts.size() >= 4) {
+                                def alertName = parts[0]
+                                def severity = parts[1].toLowerCase()
+                                def namespace = parts[2]
+                                def description = parts[3]
+
+                                def sevLevel = severityOrder[severity] ?: 0
+
+                                if (sevLevel >= minSevLevel) {
+                                    allAlerts << [
+                                        name: alertName,
+                                        severity: severity,
+                                        namespace: namespace,
+                                        description: description,
+                                        level: sevLevel
+                                    ]
+                                }
+                            }
+                        }
+
+                        if (allAlerts.size() > 0) {
+                            // Sort by severity (highest first)
+                            allAlerts.sort { a, b -> b.level <=> a.level }
+
+                            def criticalCount = allAlerts.count { it.severity == 'critical' }
+                            def warningCount = allAlerts.count { it.severity == 'warning' }
+                            def infoCount = allAlerts.count { it.severity == 'info' }
+
+                            // Determine Service Log severity based on highest alert severity
+                            def serviceLogSeverity = 'Low'
+                            if (criticalCount > 0) {
+                                serviceLogSeverity = 'Moderate'
+                            } else if (warningCount > 0) {
+                                serviceLogSeverity = 'Low'
+                            }
+
+                            // Build alert details (limit to top 10)
+                            def alertDetails = []
+                            allAlerts.take(10).each { alert ->
+                                def emoji = alert.severity == 'critical' ? '🔴' : (alert.severity == 'warning' ? '🟡' : 'ℹ️')
+                                alertDetails << "${emoji} ${alert.name} (${alert.namespace}): ${alert.description}"
+                            }
+
+                            def totalAlerts = allAlerts.size()
+                            def summary = "Active Firing Alerts Detected"
+                            if (criticalCount > 0) {
+                                summary = "${criticalCount} Critical Alert(s) Firing"
+                            } else if (warningCount > 0) {
+                                summary = "${warningCount} Warning Alert(s) Firing"
+                            }
+
+                            def message = """The cluster has ${totalAlerts} active firing alert(s):
+
+${alertDetails.join('\n')}
+
+${totalAlerts > 10 ? "\n... and ${totalAlerts - 10} more alert(s). Check AlertManager for full details." : ""}
+
+Our SRE team is monitoring these alerts. If you are experiencing service disruptions, please open a support case referencing these alerts."""
+
+                            echo message
+
+                            // Write message to temporary file
+                            writeFile file: 'service-log-message.txt', text: message
+
+                            sh """
+                                cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' '${serviceLogSeverity}' '${summary}'
+                            """
+
+                            currentBuild.result = 'UNSTABLE'
+                        } else {
+                            echo "✅ No alerts matching severity threshold '${params.MIN_SEVERITY}' found"
+
+                            def message = "No active alerts matching severity threshold '${params.MIN_SEVERITY}' or higher detected. Cluster monitoring is healthy. No action required."
+
+                            writeFile file: 'service-log-message.txt', text: message
+
+                            sh """
+                                cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Low' 'Cluster Alerts Healthy'
+                            """
+
+                            currentBuild.result = 'SUCCESS'
+                        }
+                    } else {
+                        echo "✅ No active firing alerts found"
+
+                        def message = "No active firing alerts detected in the cluster. All monitoring alerts are in normal state. Cluster health monitoring shows no issues. No action required."
+
+                        echo message
+
+                        writeFile file: 'service-log-message.txt', text: message
+
+                        sh """
+                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Low' 'Cluster Alerts Healthy'
+                        """
+
+                        currentBuild.result = 'SUCCESS'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                // Cleanup: Logout from backplane
+                sh '''
+                    export PATH=${HOME}/.local/bin/backplane/latest:${PATH}
+                    ocm backplane logout || true
+                '''
+                echo "🔒 Backplane session closed"
+            }
+        }
+        failure {
+            echo "❌ Pipeline failed - check cluster access and permissions"
+        }
+        success {
+            echo "✅ Firing alerts check completed successfully"
+        }
+    }
+}

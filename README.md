@@ -128,6 +128,89 @@ CLUSTER_ID=<cluster-id> THRESHOLD=90 ./Jenkinsfile-node-limits
 
 ---
 
+### 3.1. Active Firing Alerts Monitor (`Jenkinsfile-firing-alerts`)
+
+**Purpose**: Proactively detect and report active firing alerts from Prometheus AlertManager.
+
+**Parameters**:
+- `CLUSTER_ID` (required): The cluster ID to check
+- `MIN_SEVERITY` (default: warning): Minimum alert severity to report (info|warning|critical)
+
+**Behavior**:
+- Uses `ocm backplane elevate` to access openshift-monitoring namespace
+- Queries AlertManager API for currently active/firing alerts
+- Filters alerts by severity level
+- Groups alerts by severity (critical > warning > info)
+- If firing alerts found:
+  - Sends **Moderate** Service Log if critical alerts present
+  - Sends **Low** Service Log if only warnings/info
+  - Lists up to 10 alerts with details (shows more count if applicable)
+  - Sets build status to UNSTABLE
+- If no alerts firing:
+  - Sends **Low** severity Service Log confirming healthy state
+  - Sets build status to SUCCESS
+
+**Example Service Logs**:
+
+*Critical Alerts Detected:*
+```
+Severity: Moderate
+Summary: 2 Critical Alert(s) Firing
+Description: The cluster has 2 active firing alert(s):
+🔴 KubePodCrashLooping (customer-app): Pod customer-app/frontend-xyz is crash looping
+🔴 etcdHighFsyncDurations (openshift-etcd): etcd fsync duration is too high
+
+Our SRE team is monitoring these alerts. If you are experiencing service 
+disruptions, please open a support case referencing these alerts.
+```
+
+*Warning Alerts Only:*
+```
+Severity: Low
+Summary: 3 Warning Alert(s) Firing
+Description: The cluster has 3 active firing alert(s):
+🟡 NodeFilesystemAlmostOutOfSpace (N/A): Node worker-2 filesystem is 87% full
+🟡 PrometheusTargetSyncFailure (openshift-monitoring): Prometheus target sync failing
+ℹ️ InfoAlert (default): Informational alert
+
+Our SRE team is monitoring these alerts...
+```
+
+*Healthy Status:*
+```
+Severity: Low
+Summary: Cluster Alerts Healthy
+Description: No active firing alerts detected in the cluster. All monitoring 
+alerts are in normal state. Cluster health monitoring shows no issues. 
+No action required.
+```
+
+**Elevation Reason Used**:
+```
+Automated SRE check: querying AlertManager for active firing alerts 
+to send proactive Service Log to customer
+```
+
+**Usage**:
+```bash
+# Run with default settings (warning severity threshold)
+CLUSTER_ID=<cluster-id> ./Jenkinsfile-firing-alerts
+
+# Only report critical alerts
+CLUSTER_ID=<cluster-id> MIN_SEVERITY=critical ./Jenkinsfile-firing-alerts
+
+# Include info-level alerts
+CLUSTER_ID=<cluster-id> MIN_SEVERITY=info ./Jenkinsfile-firing-alerts
+```
+
+**Special Notes**:
+- Requires elevated permissions (automatically requested via `ocm backplane elevate`)
+- Alert descriptions come from Prometheus annotations (summary or description)
+- Alerts are sorted by severity (critical first)
+- Namespaces shown when available (shows "N/A" for cluster-scoped alerts)
+
+---
+
 ### 4. Resource Consumers Report (`Jenkinsfile-resource-consumers`)
 
 **Purpose**: Generate informational reports about top resource-consuming namespaces.
@@ -157,15 +240,17 @@ CLUSTER_ID=<cluster-id> THRESHOLD=90 ./Jenkinsfile-node-limits
 
 ```
 jenkins/
-├── Jenkinsfile-*                # Pipeline definitions
-├── scripts/                     # Check scripts
-│   ├── check-node-resources.sh # Node resource usage check
-│   ├── check-operators.sh      # Degraded operators check
-│   ├── check-resource-consumers.sh
+├── Jenkinsfile-*                      # Pipeline definitions
+├── scripts/                           # Check scripts
+│   ├── check-node-resources.sh       # Node resource usage check
+│   ├── check-node-limits.sh          # Node resource limits check
+│   ├── check-operators.sh            # Degraded operators check
+│   ├── check-firing-alerts.sh        # Active firing alerts check
+│   ├── check-resource-consumers.sh   # Resource consumption report
 │   └── ...
-├── utils/                       # Utility scripts
-│   └── send-service-log.sh     # Service Log submission utility
-└── config/                      # Configuration files
+├── utils/                             # Utility scripts
+│   └── send-service-log.sh           # Service Log submission utility
+└── config/                            # Configuration files
 ```
 
 ## Service Log Format
