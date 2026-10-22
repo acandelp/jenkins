@@ -117,7 +117,7 @@ CLUSTER_ID=<cluster-id> THRESHOLD=90 ./Jenkinsfile-node-limits
 
 ### 3.1. Active Firing Alerts Monitor (`Jenkinsfile-firing-alerts`)
 
-**Purpose**: Proactively detect and report active firing alerts from Prometheus AlertManager.
+**Purpose**: Proactively detect and report active firing alerts from Prometheus.
 
 **Parameters**:
 - `CLUSTER_ID` (required): The cluster ID to check
@@ -125,7 +125,7 @@ CLUSTER_ID=<cluster-id> THRESHOLD=90 ./Jenkinsfile-node-limits
 
 **Behavior**:
 - Uses `ocm backplane elevate` to access openshift-monitoring namespace
-- Queries AlertManager API for currently active/firing alerts
+- Queries Prometheus API directly for currently firing alerts (not AlertManager)
 - Filters alerts by severity level
 - Groups alerts by severity (critical > warning > info)
 - If firing alerts found:
@@ -184,7 +184,8 @@ CLUSTER_ID=<cluster-id> MIN_SEVERITY=info ./Jenkinsfile-firing-alerts
 
 **Special Notes**:
 - Requires elevated permissions (automatically requested via `ocm backplane elevate`)
-- Uses `amtool` (official AlertManager CLI) with fallback to direct API
+- **Queries Prometheus directly** (not AlertManager) via `/api/v1/rules` endpoint
+- This ensures alerts are detected even if AlertManager receivers are not configured
 - **Watchdog alert is excluded** (it's a heartbeat alert that's always firing)
 - Alert descriptions come from Prometheus annotations (summary, description, or message)
 - Alerts are sorted by severity (critical first)
