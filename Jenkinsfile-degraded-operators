@@ -76,20 +76,7 @@ pipeline {
 
                         currentBuild.result = 'UNSTABLE'
                     } else {
-                        echo "✅ No degraded operators found"
-
-                        // Build positive Service Log message - single line
-                        def message = "All cluster operators are healthy and functioning normally. No degraded operators detected. No action required."
-
-                        echo message
-
-                        // Write message to temporary file to avoid argument length issues
-                        writeFile file: 'service-log-message.txt', text: message
-
-                        sh """
-                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Low' 'Cluster Operators Healthy'
-                        """
-
+                        echo "✅ No degraded operators found - no Service Log sent"
                         currentBuild.result = 'SUCCESS'
                     }
                 }

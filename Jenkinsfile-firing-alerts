@@ -145,31 +145,11 @@ Our SRE team is monitoring these alerts. If you are experiencing service disrupt
 
                             currentBuild.result = 'UNSTABLE'
                         } else {
-                            echo "✅ No alerts matching severity threshold '${params.MIN_SEVERITY}' found"
-
-                            def message = "No active alerts matching severity threshold '${params.MIN_SEVERITY}' or higher detected. Cluster monitoring is healthy. No action required."
-
-                            writeFile file: 'service-log-message.txt', text: message
-
-                            sh """
-                                cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Low' 'Cluster Alerts Healthy'
-                            """
-
+                            echo "✅ No alerts matching severity threshold '${params.MIN_SEVERITY}' found - no Service Log sent"
                             currentBuild.result = 'SUCCESS'
                         }
                     } else {
-                        echo "✅ No active firing alerts found"
-
-                        def message = "No active firing alerts detected in the cluster. All monitoring alerts are in normal state. Cluster health monitoring shows no issues. No action required."
-
-                        echo message
-
-                        writeFile file: 'service-log-message.txt', text: message
-
-                        sh """
-                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Low' 'Cluster Alerts Healthy'
-                        """
-
+                        echo "✅ No active firing alerts found - no Service Log sent"
                         currentBuild.result = 'SUCCESS'
                     }
                 }

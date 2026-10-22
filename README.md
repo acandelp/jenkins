@@ -28,30 +28,23 @@ These pipelines automatically check various aspects of cluster health and send S
 **Behavior**:
 - Checks all nodes using `oc adm top nodes`
 - If any node exceeds the threshold (CPU OR memory):
-  - Sends a **Warning** Service Log listing affected nodes with their usage percentages
+  - Sends a **Moderate** Service Log listing affected nodes with their usage percentages
   - Sets build status to UNSTABLE
 - If all nodes are below the threshold:
-  - Sends a **Low** severity Service Log confirming healthy status
+  - No Service Log sent (healthy state)
   - Sets build status to SUCCESS
 
-**Example Service Logs**:
+**Example Service Log**:
 
 *High Usage Detected:*
 ```
-Severity: Warning
+Severity: Moderate
 Summary: High Node Resource Usage Detected (2 node(s))
 Description: Detected 2 node(s) exceeding 70% resource usage threshold: 
 worker-1 (CPU: 85%, Memory: 72%), worker-3 (Memory: 78%).
 ```
 
-*Healthy Status:*
-```
-Severity: Low
-Summary: Node Resources Healthy
-Description: All cluster nodes are operating within normal resource 
-usage limits (below 70% threshold for both CPU and memory). 
-Cluster performance is healthy. No action required.
-```
+*Note: No Service Log is sent when all nodes are below threshold (healthy state).*
 
 **Usage**:
 ```bash
@@ -75,29 +68,23 @@ CLUSTER_ID=<cluster-id> THRESHOLD=80 ./Jenkinsfile-node-resources
 **Behavior**:
 - Checks all nodes using `oc describe nodes` to analyze allocated resource limits
 - If any node has limits exceeding the threshold (CPU OR memory):
-  - Sends a **Warning** Service Log listing affected nodes with their limit percentages
+  - Sends a **Moderate** Service Log listing affected nodes with their limit percentages
   - Sets build status to UNSTABLE
 - If all nodes have limits below the threshold:
-  - Sends a **Low** severity Service Log confirming healthy limits
+  - No Service Log sent (healthy state)
   - Sets build status to SUCCESS
 
-**Example Service Logs**:
+**Example Service Log**:
 
 *Limits Exceeded:*
 ```
-Severity: Warning
+Severity: Moderate
 Summary: Node Resource Limits Exceeded (2 node(s))
 Description: Detected 2 node(s) with resource limits exceeding 100%: 
 worker-1 (CPU: 125%, Memory: 110%), worker-2 (CPU: 105%).
 ```
 
-*Healthy Status:*
-```
-Severity: Low
-Summary: Node Resource Limits Healthy
-Description: All cluster nodes have resource limits below 100%. 
-Node capacity allocation is within acceptable ranges. No action required.
-```
+*Note: No Service Log is sent when all nodes are below threshold (healthy state).*
 
 **Usage**:
 ```bash
@@ -120,10 +107,10 @@ CLUSTER_ID=<cluster-id> THRESHOLD=90 ./Jenkinsfile-node-limits
 **Behavior**:
 - Checks all cluster operators for degraded status
 - If degraded operators found:
-  - Sends a **Warning** Service Log listing affected operators
+  - Sends a **Moderate** Service Log listing affected operators
   - Sets build status to UNSTABLE
 - If all operators healthy:
-  - Sends a **Low** severity Service Log confirming health
+  - No Service Log sent (healthy state)
   - Sets build status to SUCCESS
 
 ---
@@ -147,7 +134,7 @@ CLUSTER_ID=<cluster-id> THRESHOLD=90 ./Jenkinsfile-node-limits
   - Lists up to 10 alerts with details (shows more count if applicable)
   - Sets build status to UNSTABLE
 - If no alerts firing:
-  - Sends **Low** severity Service Log confirming healthy state
+  - No Service Log sent (healthy state)
   - Sets build status to SUCCESS
 
 **Example Service Logs**:
@@ -176,14 +163,7 @@ Description: The cluster has 3 active firing alert(s):
 Our SRE team is monitoring these alerts...
 ```
 
-*Healthy Status:*
-```
-Severity: Low
-Summary: Cluster Alerts Healthy
-Description: No active firing alerts detected in the cluster. All monitoring 
-alerts are in normal state. Cluster health monitoring shows no issues. 
-No action required.
-```
+*Note: No Service Log is sent when no alerts are firing (healthy state).*
 
 **Elevation Reason Used**:
 ```
@@ -306,12 +286,14 @@ To add a new monitoring pipeline:
 
 ## Best Practices
 
-1. **Always send Service Logs**: Even when everything is healthy, send a positive confirmation log
+1. **Send Service Logs only for issues**: Only send Service Logs when problems are detected to reduce customer notification noise
 2. **Be customer-friendly**: Write clear, actionable messages
-3. **Include context**: Specify what was checked, what threshold was used
-4. **Provide guidance**: Tell customers what to do (or that no action is needed)
-5. **Use appropriate severity**: Don't over-alert with high severity levels
-6. **Make scripts robust**: Use `set -euo pipefail` and handle errors
+3. **Include context**: Specify what was checked, what threshold was used, and what was found
+4. **Provide guidance**: Tell customers what action is recommended or what SRE is doing
+5. **Use appropriate severity**: 
+   - **Moderate**: For issues requiring attention (resource limits exceeded, critical alerts, degraded operators)
+   - **Low**: For warnings and informational alerts (warning-level alerts, high but not critical usage)
+6. **Make scripts robust**: Use `set -euo pipefail` and handle errors gracefully
 7. **Clean up**: Always logout from backplane in the `post` section
 
 ## Troubleshooting

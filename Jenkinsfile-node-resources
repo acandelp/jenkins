@@ -87,20 +87,7 @@ pipeline {
 
                         currentBuild.result = 'UNSTABLE'
                     } else {
-                        echo "✅ All nodes below ${params.THRESHOLD}% resource usage threshold"
-
-                        // Build positive Service Log message
-                        def message = "All cluster nodes are operating within normal resource usage limits (below ${params.THRESHOLD}% threshold for both CPU and memory). Cluster performance is healthy. No action required."
-
-                        echo message
-
-                        // Write message to temporary file to avoid argument length issues
-                        writeFile file: 'service-log-message.txt', text: message
-
-                        sh """
-                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Low' 'Node Resources Healthy'
-                        """
-
+                        echo "✅ All nodes below ${params.THRESHOLD}% resource usage threshold - no Service Log sent"
                         currentBuild.result = 'SUCCESS'
                     }
                 }
