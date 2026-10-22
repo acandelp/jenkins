@@ -3,15 +3,47 @@ set -euo pipefail
 
 echo "Checking for firing alerts from Prometheus..." >&2
 
-# Method 1: Try using oc get prometheusrule to get alert definitions and their states
-echo "Attempting to query Prometheus rules..." >&2
+# Get a token for API access
+echo "Getting authentication token..." >&2
+TOKEN=$(oc whoami -t 2>/dev/null)
 
-# Get all PrometheusRule objects and check their alert states via oc
-RAW_JSON=$(oc -n openshift-monitoring exec -c prometheus prometheus-k8s-0 -- \
-  curl -s 'http://localhost:9090/api/v1/rules' 2>&1 || echo '{"status":"error"}')
+if [ -z "$TOKEN" ]; then
+  echo "ERROR: Failed to get authentication token" >&2
+  exit 1
+fi
 
-echo "Raw response received (first 200 chars):" >&2
-echo "$RAW_JSON" | head -c 200 >&2
+# Get the thanos-querier route (public endpoint)
+echo "Looking for Thanos Querier route..." >&2
+THANOS_ROUTE=$(oc -n openshift-monitoring get route thanos-querier -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+
+if [ -n "$THANOS_ROUTE" ]; then
+  echo "Using Thanos Querier route: $THANOS_ROUTE" >&2
+
+  # Query via the route (OAuth proxy protected)
+  RAW_JSON=$(curl -s -k \
+    -H "Authorization: Bearer $TOKEN" \
+    "https://$THANOS_ROUTE/api/v1/rules" 2>&1 || echo '{"status":"error"}')
+else
+  echo "Thanos route not found, using port-forward method..." >&2
+
+  # Start a temporary port-forward in the background
+  oc port-forward -n openshift-monitoring svc/thanos-querier 9091:9091 >/dev/null 2>&1 &
+  PF_PID=$!
+
+  # Wait a moment for port-forward to establish
+  sleep 3
+
+  # Query via localhost
+  RAW_JSON=$(curl -s -k \
+    -H "Authorization: Bearer $TOKEN" \
+    'https://localhost:9091/api/v1/rules' 2>&1 || echo '{"status":"error"}')
+
+  # Kill the port-forward
+  kill $PF_PID 2>/dev/null || true
+fi
+
+echo "Raw response received (first 300 chars):" >&2
+echo "$RAW_JSON" | head -c 300 >&2
 echo "" >&2
 
 # Check if we got valid JSON
