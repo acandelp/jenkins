@@ -43,7 +43,7 @@ pipeline {
 
                     sh """
                         export PATH=\${HOME}/.local/bin/backplane/latest:\${PATH}
-                        ocm backplane elevate '${params.CLUSTER_ID}' --reason "Automated SRE check: querying AlertManager for active firing alerts to send proactive Service Log to customer"
+                        ocm backplane elevate "Automated SRE check: querying AlertManager for active firing alerts to send proactive Service Log to customer"
                     """
 
                     echo "✅ Elevated permissions granted"

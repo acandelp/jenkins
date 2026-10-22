@@ -165,10 +165,9 @@ Our SRE team is monitoring these alerts...
 
 *Note: No Service Log is sent when no alerts are firing (healthy state).*
 
-**Elevation Reason Used**:
-```
-Automated SRE check: querying AlertManager for active firing alerts 
-to send proactive Service Log to customer
+**Elevation Command**:
+```bash
+ocm backplane elevate "Automated SRE check: querying AlertManager for active firing alerts to send proactive Service Log to customer"
 ```
 
 **Usage**:
