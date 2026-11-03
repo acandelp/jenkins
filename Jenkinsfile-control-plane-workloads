@@ -1,0 +1,116 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'CLUSTER_ID', defaultValue: '', description: 'Cluster ID to check')
+    }
+
+    environment {
+        PATH = "${env.HOME}/.local/bin/backplane/latest:${env.HOME}/.local/bin:/usr/local/bin:${env.PATH}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Backplane Login') {
+            steps {
+                script {
+                    echo "Setting up Backplane authentication..."
+
+                    if (!params.CLUSTER_ID) {
+                        error("CLUSTER_ID parameter is required")
+                    }
+
+                    sh """
+                        export PATH=\${HOME}/.local/bin/backplane/latest:\${PATH}
+                        ocm backplane login ${params.CLUSTER_ID}
+                    """
+
+                    echo "✅ Backplane login successful"
+                }
+            }
+        }
+
+        stage('Setup') {
+            steps {
+                sh 'chmod +x scripts/*.sh utils/*.sh'
+            }
+        }
+
+        stage('Check Control Plane Workloads') {
+            steps {
+                script {
+                    def results = sh(
+                        script: "./scripts/check-control-plane-workloads.sh",
+                        returnStdout: true
+                    ).trim()
+
+                    if (results) {
+                        echo "⚠️  Found customer workloads running on control plane nodes"
+
+                        // Parse results and build detailed message
+                        def lines = results.split('\n')
+                        def podCount = lines.size()
+                        def namespaceSet = [] as Set
+                        def podDetails = []
+
+                        lines.each { line ->
+                            def parts = line.split('\\|')
+                            def namespace = parts[0]
+                            def podName = parts[1]
+                            def nodeName = parts[2]
+
+                            namespaceSet.add(namespace)
+                            podDetails << "${namespace}/${podName} (node: ${nodeName})"
+                        }
+
+                        def namespaces = namespaceSet.toList().join(', ')
+                        def podList = podDetails.take(5).join(', ')
+                        if (podCount > 5) {
+                            podList += " and ${podCount - 5} more"
+                        }
+
+                        def message = "Detected ${podCount} customer workload pod(s) running on control plane nodes in ${namespaceSet.size()} namespace(s): ${namespaces}. Affected pods: ${podList}. Customer workloads should not run on control plane nodes as this may impact cluster stability. Please review pod tolerations and node selectors to ensure workloads are scheduled on worker nodes."
+
+                        echo message
+
+                        // Write message to temporary file to avoid argument length issues
+                        writeFile file: 'service-log-message.txt', text: message
+
+                        sh """
+                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' 'Moderate' 'Customer Workloads on Control Plane Nodes (${podCount} pod(s))'
+                        """
+
+                        currentBuild.result = 'UNSTABLE'
+                    } else {
+                        echo "✅ No customer workloads found on control plane nodes - no Service Log sent"
+                        currentBuild.result = 'SUCCESS'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                // Cleanup: Logout from backplane
+                sh '''
+                    export PATH=${HOME}/.local/bin/backplane/latest:${PATH}
+                    ocm backplane logout || true
+                '''
+                echo "🔒 Backplane session closed"
+            }
+        }
+        failure {
+            echo "❌ Pipeline failed - check cluster access"
+        }
+        success {
+            echo "✅ Control plane workloads check completed successfully"
+        }
+    }
+}

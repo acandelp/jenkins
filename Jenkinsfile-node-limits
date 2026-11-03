@@ -36,6 +36,19 @@ pipeline {
             }
         }
 
+        stage('Elevate Permissions') {
+            steps {
+                script {
+                    echo "Elevating backplane permissions..."
+                    sh """
+                        export PATH=\${HOME}/.local/bin/backplane/latest:\${PATH}
+                        ocm backplane elevate ${params.CLUSTER_ID} --reason "Checking node resource limits"
+                    """
+                    echo "✅ Elevated permissions granted"
+                }
+            }
+        }
+
         stage('Setup') {
             steps {
                 sh 'chmod +x scripts/*.sh utils/*.sh'
