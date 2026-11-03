@@ -4,8 +4,6 @@ pipeline {
     parameters {
         string(name: 'CLUSTER_ID', defaultValue: '', description: 'Cluster ID to check')
         string(name: 'TOP_N', defaultValue: '5', description: 'Number of top consumers to report')
-        string(name: 'CPU_THRESHOLD', defaultValue: '50', description: 'Total CPU cores threshold for warning (default: 50)')
-        string(name: 'MEMORY_THRESHOLD_GIB', defaultValue: '100', description: 'Total memory threshold in GiB for warning (default: 100)')
     }
 
     environment {
@@ -93,57 +91,21 @@ pipeline {
                         def cpuFormatted = String.format("%.2f", totalCpu)
                         def memFormatted = String.format("%.2f", totalMem)
 
-                        // Check against thresholds
-                        def cpuThreshold = params.CPU_THRESHOLD.toFloat()
-                        def memThreshold = params.MEMORY_THRESHOLD_GIB.toFloat()
-                        def cpuExceeded = totalCpu >= cpuThreshold
-                        def memExceeded = totalMem >= memThreshold
+                        // Build informational Service Log message
+                        def message = "Current cluster resource consumption: ${cpuFormatted} cores CPU, ${memFormatted} GiB memory. Top CPU consumers: ${topCpuNamespaces}. Top memory consumers: ${topMemNamespaces}. This is an informational report for cluster resource monitoring."
 
-                        def message = ""
-                        def severity = ""
-                        def title = ""
+                        def severity = 'Low'
+                        def title = 'Resource Consumption Report'
+                        currentBuild.result = 'SUCCESS'
 
-                        if (cpuExceeded || memExceeded) {
-                            // High resource consumption detected
-                            def issues = []
-                            if (cpuExceeded) {
-                                issues << "CPU usage at ${cpuFormatted} cores (threshold: ${cpuThreshold} cores)"
-                            }
-                            if (memExceeded) {
-                                issues << "Memory usage at ${memFormatted} GiB (threshold: ${memThreshold} GiB)"
-                            }
+                        echo "✅ ${message}"
 
-                            message = "High resource consumption detected: ${issues.join(', ')}. Top CPU consumers: ${topCpuNamespaces}. Top memory consumers: ${topMemNamespaces}. Review namespace resource usage and consider scaling or optimization."
+                        // Write message to temporary file to avoid argument length issues
+                        writeFile file: 'service-log-message.txt', text: message
 
-                            severity = 'Moderate'
-                            title = 'High Resource Consumption Detected'
-                            currentBuild.result = 'UNSTABLE'
-
-                            echo "⚠️  ${message}"
-
-                            // Write message to temporary file to avoid argument length issues
-                            writeFile file: 'service-log-message.txt', text: message
-
-                            sh """
-                                cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' '${severity}' '${title}'
-                            """
-                        } else {
-                            // Normal resource consumption - send informational Service Log
-                            message = "Resource consumption within normal thresholds. Current usage: ${cpuFormatted} cores CPU (threshold: ${cpuThreshold} cores), ${memFormatted} GiB memory (threshold: ${memThreshold} GiB). Top CPU consumers: ${topCpuNamespaces}. Top memory consumers: ${topMemNamespaces}. No action required - this is an informational report."
-
-                            severity = 'Low'
-                            title = 'Resource Consumption Report - Normal'
-                            currentBuild.result = 'SUCCESS'
-
-                            echo "✅ ${message}"
-
-                            // Write message to temporary file to avoid argument length issues
-                            writeFile file: 'service-log-message.txt', text: message
-
-                            sh """
-                                cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' '${severity}' '${title}'
-                            """
-                        }
+                        sh """
+                            cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' '${severity}' '${title}'
+                        """
                     } else {
                         echo "⚠️  No resource consumption data available"
 

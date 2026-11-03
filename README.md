@@ -117,53 +117,35 @@ CLUSTER_ID=<cluster-id> THRESHOLD=90 ./Jenkinsfile-node-limits
 
 ### 4. Resource Consumers Report (`Jenkinsfile-resource-consumers`)
 
-**Purpose**: Generate informational reports about top resource-consuming namespaces and alert when thresholds are exceeded.
+**Purpose**: Generate informational reports about cluster resource consumption and top resource-consuming namespaces.
 
 **Parameters**:
 - `CLUSTER_ID` (required): The cluster ID to check
 - `TOP_N` (default: 5): Number of top consumers to report
-- `CPU_THRESHOLD` (default: 50): Total CPU cores threshold for warning
-- `MEMORY_THRESHOLD_GIB` (default: 100): Total memory threshold in GiB for warning
 
 **Behavior**:
 - Queries Prometheus for namespace-level resource usage
-- **Always sends a Service Log** with resource consumption report:
-  - If thresholds exceeded: Sends **Moderate** severity Service Log with warning
-  - If within normal thresholds: Sends **Low** severity Service Log (informational)
+- **Always sends a Service Log** with severity **Low** (informational)
+- Reports total CPU and memory consumption across the cluster
 - Lists top CPU and memory consuming namespaces
-- Sets build status to UNSTABLE if thresholds exceeded, SUCCESS otherwise
+- Build status always set to SUCCESS
 
-**Example Service Logs**:
+**Example Service Log**:
 
-*High Consumption (Thresholds Exceeded):*
-```
-Severity: Moderate
-Summary: High Resource Consumption Detected
-Description: High resource consumption detected: CPU usage at 75.50 cores (threshold: 50 cores), 
-Memory usage at 120.25 GiB (threshold: 100 GiB). Top CPU consumers: namespace-a (50.00 cores), 
-namespace-b (15.50 cores), namespace-c (10.00 cores). Top memory consumers: namespace-x (80.00 GiB), 
-namespace-y (25.25 GiB), namespace-z (15.00 GiB). Review namespace resource usage and consider 
-scaling or optimization.
-```
-
-*Normal Consumption (Within Thresholds):*
 ```
 Severity: Low
-Summary: Resource Consumption Report - Normal
-Description: Resource consumption within normal thresholds. Current usage: 0.21 cores CPU 
-(threshold: 50.0 cores), 6.51 GiB memory (threshold: 100.0 GiB). Top CPU consumers: 
-openshift-monitoring (0.10 cores), kube-system (0.05 cores), default (0.03 cores). 
-Top memory consumers: openshift-monitoring (3.50 GiB), kube-system (2.00 GiB), default (1.01 GiB). 
-No action required - this is an informational report.
+Summary: Resource Consumption Report
+Description: Current cluster resource consumption: 0.21 cores CPU, 6.51 GiB memory. 
+Top CPU consumers: openshift-monitoring (0.10 cores), kube-system (0.05 cores), 
+default (0.03 cores). Top memory consumers: openshift-monitoring (3.50 GiB), 
+kube-system (2.00 GiB), default (1.01 GiB). This is an informational report for 
+cluster resource monitoring.
 ```
 
 **Usage**:
 ```bash
-# Run with default thresholds (50 cores CPU, 100 GiB memory)
+# Run with default settings (top 5 consumers)
 CLUSTER_ID=<cluster-id> ./Jenkinsfile-resource-consumers
-
-# Run with custom thresholds
-CLUSTER_ID=<cluster-id> CPU_THRESHOLD=100 MEMORY_THRESHOLD_GIB=200 ./Jenkinsfile-resource-consumers
 
 # Report top 10 consumers instead of 5
 CLUSTER_ID=<cluster-id> TOP_N=10 ./Jenkinsfile-resource-consumers
@@ -250,13 +232,15 @@ To add a new monitoring pipeline:
 
 ## Best Practices
 
-1. **Send Service Logs only for issues**: Only send Service Logs when problems are detected to reduce customer notification noise
+1. **Choose appropriate Service Log frequency**: 
+   - Most pipelines only send Service Logs when problems are detected to reduce customer notification noise
+   - Resource consumption pipeline sends informational reports on every run for monitoring purposes
 2. **Be customer-friendly**: Write clear, actionable messages
-3. **Include context**: Specify what was checked, what threshold was used, and what was found
+3. **Include context**: Specify what was checked and what was found
 4. **Provide guidance**: Tell customers what action is recommended or what SRE is doing
 5. **Use appropriate severity**: 
-   - **Moderate**: For issues requiring attention (resource limits exceeded, critical alerts, degraded operators)
-   - **Low**: For warnings and informational alerts (warning-level alerts, high but not critical usage)
+   - **Moderate**: For issues requiring attention (resource limits exceeded, degraded operators)
+   - **Low**: For informational reports and monitoring (resource consumption reports)
 6. **Make scripts robust**: Use `set -euo pipefail` and handle errors gracefully
 7. **Clean up**: Always logout from backplane in the `post` section
 
