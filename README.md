@@ -117,16 +117,57 @@ CLUSTER_ID=<cluster-id> THRESHOLD=90 ./Jenkinsfile-node-limits
 
 ### 4. Resource Consumers Report (`Jenkinsfile-resource-consumers`)
 
-**Purpose**: Generate informational reports about top resource-consuming namespaces.
+**Purpose**: Generate informational reports about top resource-consuming namespaces and alert when thresholds are exceeded.
 
 **Parameters**:
 - `CLUSTER_ID` (required): The cluster ID to check
 - `TOP_N` (default: 5): Number of top consumers to report
+- `CPU_THRESHOLD` (default: 50): Total CPU cores threshold for warning
+- `MEMORY_THRESHOLD_GIB` (default: 100): Total memory threshold in GiB for warning
 
 **Behavior**:
 - Queries Prometheus for namespace-level resource usage
-- Generates informational Service Log with top CPU and memory consumers
-- Always sends **Low** severity (informational only)
+- **Always sends a Service Log** with resource consumption report:
+  - If thresholds exceeded: Sends **Moderate** severity Service Log with warning
+  - If within normal thresholds: Sends **Low** severity Service Log (informational)
+- Lists top CPU and memory consuming namespaces
+- Sets build status to UNSTABLE if thresholds exceeded, SUCCESS otherwise
+
+**Example Service Logs**:
+
+*High Consumption (Thresholds Exceeded):*
+```
+Severity: Moderate
+Summary: High Resource Consumption Detected
+Description: High resource consumption detected: CPU usage at 75.50 cores (threshold: 50 cores), 
+Memory usage at 120.25 GiB (threshold: 100 GiB). Top CPU consumers: namespace-a (50.00 cores), 
+namespace-b (15.50 cores), namespace-c (10.00 cores). Top memory consumers: namespace-x (80.00 GiB), 
+namespace-y (25.25 GiB), namespace-z (15.00 GiB). Review namespace resource usage and consider 
+scaling or optimization.
+```
+
+*Normal Consumption (Within Thresholds):*
+```
+Severity: Low
+Summary: Resource Consumption Report - Normal
+Description: Resource consumption within normal thresholds. Current usage: 0.21 cores CPU 
+(threshold: 50.0 cores), 6.51 GiB memory (threshold: 100.0 GiB). Top CPU consumers: 
+openshift-monitoring (0.10 cores), kube-system (0.05 cores), default (0.03 cores). 
+Top memory consumers: openshift-monitoring (3.50 GiB), kube-system (2.00 GiB), default (1.01 GiB). 
+No action required - this is an informational report.
+```
+
+**Usage**:
+```bash
+# Run with default thresholds (50 cores CPU, 100 GiB memory)
+CLUSTER_ID=<cluster-id> ./Jenkinsfile-resource-consumers
+
+# Run with custom thresholds
+CLUSTER_ID=<cluster-id> CPU_THRESHOLD=100 MEMORY_THRESHOLD_GIB=200 ./Jenkinsfile-resource-consumers
+
+# Report top 10 consumers instead of 5
+CLUSTER_ID=<cluster-id> TOP_N=10 ./Jenkinsfile-resource-consumers
+```
 
 ---
 

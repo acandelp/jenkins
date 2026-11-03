@@ -128,9 +128,21 @@ pipeline {
                                 cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' '${severity}' '${title}'
                             """
                         } else {
-                            // Normal resource consumption - no Service Log sent
-                            echo "✅ Resource consumption within normal thresholds (CPU: ${cpuFormatted} cores < ${cpuThreshold} cores, Memory: ${memFormatted} GiB < ${memThreshold} GiB) - no Service Log sent"
+                            // Normal resource consumption - send informational Service Log
+                            message = "Resource consumption within normal thresholds. Current usage: ${cpuFormatted} cores CPU (threshold: ${cpuThreshold} cores), ${memFormatted} GiB memory (threshold: ${memThreshold} GiB). Top CPU consumers: ${topCpuNamespaces}. Top memory consumers: ${topMemNamespaces}. No action required - this is an informational report."
+
+                            severity = 'Low'
+                            title = 'Resource Consumption Report - Normal'
                             currentBuild.result = 'SUCCESS'
+
+                            echo "✅ ${message}"
+
+                            // Write message to temporary file to avoid argument length issues
+                            writeFile file: 'service-log-message.txt', text: message
+
+                            sh """
+                                cat service-log-message.txt | ./utils/send-service-log.sh '${params.CLUSTER_ID}' '${severity}' '${title}'
+                            """
                         }
                     } else {
                         echo "⚠️  No resource consumption data available"
